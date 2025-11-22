@@ -784,20 +784,14 @@ class TabManager: NSObject {
 
   /// Forget all data for websites that have forget me enabled
   /// Will forget all data instantly with no delay
-  @MainActor func forgetDataOnAppExitDomains() {
+  func forgetDataOnAppExitDomains() {
     guard BraveCore.FeatureList.kBraveShredFeature.enabled else { return }
-    let shredOnAppExitURLs = Domain.allDomainsWithShredLevelAppExit()?
-      .compactMap { domain -> URL? in
-        guard let urlString = domain.url,
-          let url = URL(string: urlString),
-          !InternalURL.isValid(url: url)
-        else {
-          return nil
-        }
-        return url
-      }
-    guard let shredOnAppExitURLs, !shredOnAppExitURLs.isEmpty else { return }
     Task {
+      let shredOnAppExitURLs = await Domain.allURLsWithShredLevel(
+        rawShredLevel: SiteShredLevel.appExit.rawValue,
+        isGlobalShredLevel: Preferences.Shields.shredLevel.shredOnAppExit
+      )
+      guard !shredOnAppExitURLs.isEmpty else { return }
       await forgetData(for: shredOnAppExitURLs)
     }
   }
@@ -847,7 +841,7 @@ class TabManager: NSObject {
     let isPrivateBrowsing = privateBrowsingManager.isPrivateBrowsing
     let configuration = isPrivateBrowsing ? Self.privateConfiguration : Self.defaultConfiguration
     let urlsToShred = Set(tabs.compactMap(\.visibleURL?.urlToShred))
-    let tabsToRemove = allTabs.filter({
+    let tabsToRemove = self.tabs(isPrivate: isPrivateBrowsing).filter({
       if let url = $0.visibleURL?.urlToShred {
         return urlsToShred.contains(url)
       }
@@ -906,13 +900,15 @@ class TabManager: NSObject {
     }
 
     // Remove all unwanted tabs
-    for tab in allTabs {
-      guard tab.visibleURL?.urlToShred?.baseDomain == baseDomain else { continue }
+    for tabToClose in allTabs
+    where tabToClose.visibleURL?.urlToShred?.baseDomain == baseDomain
+      && tabToClose.isPrivate == tab.isPrivate
+    {
       // The Tab's WebView is not deinitialized immediately, so it's possible the
       // WebView still stores data after we shred but before the WebView is deinitialized.
       // Delete the web view to prevent data being stored after data is Shred.
-      tab.deleteWebView()
-      removeTab(tab)
+      tabToClose.deleteWebView()
+      removeTab(tabToClose)
     }
 
     Task {

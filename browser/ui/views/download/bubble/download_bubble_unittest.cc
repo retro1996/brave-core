@@ -4,8 +4,8 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "base/test/scoped_feature_list.h"
-#include "brave/browser/download/brave_download_commands.h"
 #include "chrome/browser/download/download_item_model.h"
+#include "chrome/browser/download/download_ui_context_menu.h"
 #include "chrome/browser/ui/download/download_bubble_info_utils.h"
 #include "chrome/browser/ui/views/download/download_ui_context_menu_view.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -45,6 +45,10 @@ class DownloadBubbleTest : public testing::Test {
         testing_profile_manager_(TestingBrowserProcess::GetGlobal()) {}
 
   ~DownloadBubbleTest() override = default;
+
+  ui::SimpleMenuModel* GetMenuModel(DownloadUiContextMenuView& ctx_menu) {
+    return ctx_menu.GetMenuModel();
+  }
 
   void SetUp() override {
     ASSERT_TRUE(testing_profile_manager_.SetUp());
@@ -96,9 +100,9 @@ class DownloadBubbleTest : public testing::Test {
 
   bool ContainsDeleteLocalFileCommand() {
     auto quick_actions = QuickActionsForDownload(model_);
-    return std::ranges::find(
-               quick_actions, BraveDownloadCommands::DELETE_LOCAL_FILE,
-               &DownloadBubbleQuickAction::command) != quick_actions.end();
+    return std::ranges::find(quick_actions, DownloadCommands::DELETE_LOCAL_FILE,
+                             &DownloadBubbleQuickAction::command) !=
+           quick_actions.end();
   }
 
   content::BrowserTaskEnvironment task_environment_;
@@ -113,9 +117,9 @@ TEST_F(DownloadBubbleTest, ContextMenuCompletedItemTest) {
 
   // Check complete item has remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_TRUE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, ContextMenuInProgressItemTest) {
@@ -124,9 +128,9 @@ TEST_F(DownloadBubbleTest, ContextMenuInProgressItemTest) {
 
   // Check in-progress item doesn't have remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_FALSE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, ContextMenuCancelledItemTest) {
@@ -135,9 +139,9 @@ TEST_F(DownloadBubbleTest, ContextMenuCancelledItemTest) {
 
   // Check cancelled item has remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_TRUE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, DeleteLocalFileCommand_Incomplete) {
@@ -169,7 +173,7 @@ TEST_F(DownloadBubbleTest, DeleteLocalFileCommand_Complete) {
   EXPECT_TRUE(ContainsDeleteLocalFileCommand());
 }
 
-TEST_F(DownloadBubbleTest, BraveDownloadCommands_DeleteLocalFileEnabled) {
+TEST_F(DownloadBubbleTest, DownloadCommands_DeleteLocalFileEnabled) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -179,13 +183,12 @@ TEST_F(DownloadBubbleTest, BraveDownloadCommands_DeleteLocalFileEnabled) {
   ASSERT_FALSE(model_.GetFileExternallyRemoved());
   ASSERT_FALSE(model_.GetFullPath().empty());
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_TRUE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_TRUE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
 }
 
 TEST_F(DownloadBubbleTest,
-       BraveDownloadCommands_DeleteLocalFileDisabledWhenFullPathEmpty) {
+       DownloadCommands_DeleteLocalFileDisabledWhenFullPathEmpty) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -195,13 +198,12 @@ TEST_F(DownloadBubbleTest,
   ASSERT_FALSE(model_.GetFileExternallyRemoved());
   EXPECT_CALL(item_, GetFullPath()).WillOnce(ReturnRefOfCopy(base::FilePath()));
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_FALSE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_FALSE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
 }
 
 TEST_F(DownloadBubbleTest,
-       BraveDownloadCommands_DeleteLocalFileDisabledWhenExternallyRemoved) {
+       DownloadCommands_DeleteLocalFileDisabledWhenExternallyRemoved) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -210,7 +212,6 @@ TEST_F(DownloadBubbleTest,
   ASSERT_FALSE(item_.GetFullPath().empty());
   EXPECT_CALL(item_, GetFileExternallyRemoved()).WillOnce(Return(true));
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_FALSE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_FALSE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
 }
