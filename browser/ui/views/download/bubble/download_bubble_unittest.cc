@@ -3,9 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
-#include "brave/browser/download/brave_download_commands.h"
 #include "chrome/browser/download/download_item_model.h"
+#include "chrome/browser/download/download_ui_context_menu.h"
 #include "chrome/browser/ui/download/download_bubble_info_utils.h"
 #include "chrome/browser/ui/views/download/download_ui_context_menu_view.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -16,6 +17,9 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/clipboard/clipboard.h"
+#include "ui/base/clipboard/clipboard_buffer.h"
+#include "ui/base/clipboard/test/test_clipboard.h"
 #include "ui/menus/simple_menu_model.h"
 #include "url/gurl.h"
 
@@ -45,6 +49,10 @@ class DownloadBubbleTest : public testing::Test {
         testing_profile_manager_(TestingBrowserProcess::GetGlobal()) {}
 
   ~DownloadBubbleTest() override = default;
+
+  ui::SimpleMenuModel* GetMenuModel(DownloadUiContextMenuView& ctx_menu) {
+    return ctx_menu.GetMenuModel();
+  }
 
   void SetUp() override {
     ASSERT_TRUE(testing_profile_manager_.SetUp());
@@ -96,9 +104,9 @@ class DownloadBubbleTest : public testing::Test {
 
   bool ContainsDeleteLocalFileCommand() {
     auto quick_actions = QuickActionsForDownload(model_);
-    return std::ranges::find(
-               quick_actions, BraveDownloadCommands::DELETE_LOCAL_FILE,
-               &DownloadBubbleQuickAction::command) != quick_actions.end();
+    return std::ranges::find(quick_actions, DownloadCommands::DELETE_LOCAL_FILE,
+                             &DownloadBubbleQuickAction::command) !=
+           quick_actions.end();
   }
 
   content::BrowserTaskEnvironment task_environment_;
@@ -113,9 +121,9 @@ TEST_F(DownloadBubbleTest, ContextMenuCompletedItemTest) {
 
   // Check complete item has remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_TRUE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, ContextMenuInProgressItemTest) {
@@ -124,9 +132,9 @@ TEST_F(DownloadBubbleTest, ContextMenuInProgressItemTest) {
 
   // Check in-progress item doesn't have remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_FALSE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, ContextMenuCancelledItemTest) {
@@ -135,9 +143,9 @@ TEST_F(DownloadBubbleTest, ContextMenuCancelledItemTest) {
 
   // Check cancelled item has remove from list menu entry;
   DownloadUiContextMenuView ctx_menu(model_.GetWeakPtr());
-  auto* menu_model = ctx_menu.GetMenuModel();
+  auto* menu_model = GetMenuModel(ctx_menu);
   EXPECT_TRUE(
-      menu_model->GetIndexOfCommandId(BraveDownloadCommands::REMOVE_FROM_LIST));
+      menu_model->GetIndexOfCommandId(DownloadCommands::REMOVE_FROM_LIST));
 }
 
 TEST_F(DownloadBubbleTest, DeleteLocalFileCommand_Incomplete) {
@@ -169,7 +177,7 @@ TEST_F(DownloadBubbleTest, DeleteLocalFileCommand_Complete) {
   EXPECT_TRUE(ContainsDeleteLocalFileCommand());
 }
 
-TEST_F(DownloadBubbleTest, BraveDownloadCommands_DeleteLocalFileEnabled) {
+TEST_F(DownloadBubbleTest, DownloadCommands_DeleteLocalFileEnabled) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -179,13 +187,12 @@ TEST_F(DownloadBubbleTest, BraveDownloadCommands_DeleteLocalFileEnabled) {
   ASSERT_FALSE(model_.GetFileExternallyRemoved());
   ASSERT_FALSE(model_.GetFullPath().empty());
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_TRUE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_TRUE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
 }
 
 TEST_F(DownloadBubbleTest,
-       BraveDownloadCommands_DeleteLocalFileDisabledWhenFullPathEmpty) {
+       DownloadCommands_DeleteLocalFileDisabledWhenFullPathEmpty) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -195,13 +202,12 @@ TEST_F(DownloadBubbleTest,
   ASSERT_FALSE(model_.GetFileExternallyRemoved());
   EXPECT_CALL(item_, GetFullPath()).WillOnce(ReturnRefOfCopy(base::FilePath()));
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_FALSE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_FALSE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
 }
 
 TEST_F(DownloadBubbleTest,
-       BraveDownloadCommands_DeleteLocalFileDisabledWhenExternallyRemoved) {
+       DownloadCommands_DeleteLocalFileDisabledWhenExternallyRemoved) {
   SetupDownloadItemDefaults();
   SetupCompletedDownloadItem();
 
@@ -210,7 +216,29 @@ TEST_F(DownloadBubbleTest,
   ASSERT_FALSE(item_.GetFullPath().empty());
   EXPECT_CALL(item_, GetFileExternallyRemoved()).WillOnce(Return(true));
 
-  BraveDownloadCommands commands(model_.GetWeakPtr());
-  EXPECT_FALSE(
-      commands.IsCommandEnabled(BraveDownloadCommands::DELETE_LOCAL_FILE));
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_FALSE(commands.IsCommandEnabled(DownloadCommands::DELETE_LOCAL_FILE));
+}
+
+TEST_F(DownloadBubbleTest, DownloadCommands_CopyDownloadLink) {
+  ui::TestClipboard::CreateForCurrentThread();
+
+  SetupDownloadItemDefaults();
+
+  // Check if "Copy download link" command exists.
+  DownloadCommands commands(model_.GetWeakPtr());
+  EXPECT_TRUE(commands.IsCommandEnabled(DownloadCommands::COPY_DOWNLOAD_LINK));
+
+  // Check if executing the command copies the URL to clipboard.
+  auto* clipboard = ui::Clipboard::GetForCurrentThread();
+  clipboard->Clear(ui::ClipboardBuffer::kCopyPaste);
+  commands.ExecuteCommand(DownloadCommands::COPY_DOWNLOAD_LINK);
+
+  std::u16string clipboard_text;
+  clipboard->ReadText(ui::ClipboardBuffer::kCopyPaste, nullptr,
+                      &clipboard_text);
+
+  EXPECT_EQ(base::UTF8ToUTF16(model_.GetURL().spec()), clipboard_text);
+
+  ui::TestClipboard::DestroyClipboardForCurrentThread();
 }

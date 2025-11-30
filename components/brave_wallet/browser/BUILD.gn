@@ -4,10 +4,13 @@
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import("//brave/build/config.gni")
+import("//brave/components/brave_wallet/common/buildflags/buildflags.gni")
 import("//brave/components/brave_wallet/common/config.gni")
 import("//build/config/features.gni")
 import("//third_party/protobuf/proto_library.gni")
 import("//tools/json_schema_compiler/json_schema_api.gni")
+
+assert(enable_brave_wallet)
 
 static_library("browser") {
   sources = [
@@ -184,6 +187,8 @@ static_library("browser") {
     "password_encryptor.h",
     "polkadot/polkadot_block_tracker.cc",
     "polkadot/polkadot_block_tracker.h",
+    "polkadot/polkadot_extrinsic.cc",
+    "polkadot/polkadot_extrinsic.h",
     "polkadot/polkadot_substrate_rpc.cc",
     "polkadot/polkadot_substrate_rpc.h",
     "polkadot/polkadot_tx_manager.cc",
@@ -312,7 +317,6 @@ static_library("browser") {
     ":meld_integration_responses",
     ":pref_names",
     ":transaction",
-    ":utils",
     "//base",
     "//brave/components/brave_component_updater/browser:public",
     "//brave/components/brave_stats/browser",
@@ -321,12 +325,10 @@ static_library("browser") {
     "//brave/components/brave_wallet/browser/cardano:generated_cardano_rpc_blockfrost_api",
     "//brave/components/brave_wallet/browser/internal:cardano_tx_decoder",
     "//brave/components/brave_wallet/browser/internal:hd_key_common",
+    "//brave/components/brave_wallet/browser/internal:polkadot_extrinsic_rs",
     "//brave/components/brave_wallet/browser/polkadot:generated_polkadot_substrate_rpc_responses",
-    "//brave/components/brave_wallet/common",
-    "//brave/components/brave_wallet/common:buildflags",
     "//brave/components/brave_wallet/common:common_constants",
-    "//brave/components/brave_wallet/common:mojom",
-    "//brave/components/brave_wallet/common:pref_names",
+    "//brave/components/brave_wallet/common/buildflags",
     "//brave/components/constants",
     "//brave/components/decentralized_dns/core",
     "//brave/components/ipfs",
@@ -359,7 +361,12 @@ static_library("browser") {
     "//url",
   ]
 
-  public_deps = [ "//brave/components/api_request_helper" ]
+  public_deps = [
+    ":utils",
+    "//brave/components/api_request_helper",
+    "//brave/components/brave_wallet/common",
+    "//brave/components/brave_wallet/common:mojom",
+  ]
 
   if (enable_orchard) {
     sources += [
@@ -369,6 +376,8 @@ static_library("browser") {
       "zcash/zcash_blocks_batch_scan_task.h",
       "zcash/zcash_create_orchard_to_orchard_transaction_task.cc",
       "zcash/zcash_create_orchard_to_orchard_transaction_task.h",
+      "zcash/zcash_create_orchard_to_transparent_transaction_task.cc",
+      "zcash/zcash_create_orchard_to_transparent_transaction_task.h",
       "zcash/zcash_create_transparent_to_orchard_transaction_task.cc",
       "zcash/zcash_create_transparent_to_orchard_transaction_task.h",
       "zcash/zcash_get_zcash_chain_tip_status_task.cc",
@@ -402,6 +411,7 @@ if (use_blink) {
       ":utils",
       "//base",
       "//brave/components/brave_wallet/common:mojom",
+      "//brave/components/brave_wallet/common/buildflags",
       "//components/permissions:permissions_common",
       "//third_party/blink/public/common",
       "//third_party/re2",
@@ -428,6 +438,7 @@ source_set("constants") {
 
 source_set("pref_names") {
   sources = [ "pref_names.h" ]
+  deps = [ "//brave/components/brave_wallet/common/buildflags" ]
 }
 
 source_set("utils") {
@@ -443,8 +454,8 @@ source_set("utils") {
     ":pref_names",
     "//base",
     "//brave/components/brave_wallet/common",
-    "//brave/components/brave_wallet/common:buildflags",
     "//brave/components/brave_wallet/common:mojom",
+    "//brave/components/brave_wallet/common/buildflags",
     "//brave/components/constants",
     "//brave/components/version_info",
     "//brave/third_party/bip39wally-core-native:bip39wally-core",
@@ -498,10 +509,10 @@ source_set("hd_keyring") {
     "//brave/components/brave_wallet/browser:utils",
     "//brave/components/brave_wallet/browser/internal:hd_key",
     "//brave/components/brave_wallet/common",
-    "//brave/components/brave_wallet/common:buildflags",
     "//brave/components/brave_wallet/common:common_constants",
     "//brave/components/brave_wallet/common:mojom",
     "//brave/components/brave_wallet/common:rust_lib",
+    "//brave/components/brave_wallet/common/buildflags",
     "//crypto",
   ]
 }
@@ -561,8 +572,8 @@ source_set("test_support") {
     "//brave/components/brave_wallet/browser/cardano:generated_cardano_rpc_blockfrost_api",
     "//brave/components/brave_wallet/browser/polkadot:generated_polkadot_substrate_rpc_responses",
     "//brave/components/brave_wallet/common",
-    "//brave/components/brave_wallet/common:buildflags",
     "//brave/components/brave_wallet/common:mojom",
+    "//brave/components/brave_wallet/common/buildflags",
     "//brave/components/services/brave_wallet/public/mojom",
     "//services/network:test_support",
     "//services/network/public/cpp",
@@ -734,6 +745,7 @@ source_set("unit_tests") {
     "network_manager_unittest.cc",
     "nft_metadata_fetcher_unittest.cc",
     "password_encryptor_unittest.cc",
+    "polkadot/polkadot_extrinsic_unittest.cc",
     "polkadot/polkadot_keyring_unittest.cc",
     "polkadot/polkadot_substrate_rpc_unittest.cc",
     "polkadot/polkadot_tx_manager_unittest.cc",
@@ -820,11 +832,11 @@ source_set("unit_tests") {
     "//brave/components/brave_wallet/browser/internal:hd_key",
     "//brave/components/brave_wallet/browser/polkadot:generated_polkadot_substrate_rpc_responses",
     "//brave/components/brave_wallet/common",
-    "//brave/components/brave_wallet/common:buildflags",
     "//brave/components/brave_wallet/common:common_constants",
     "//brave/components/brave_wallet/common:mojom",
     "//brave/components/brave_wallet/common:rust_lib",
     "//brave/components/brave_wallet/common:test_support",
+    "//brave/components/brave_wallet/common/buildflags",
     "//brave/components/constants",
     "//brave/components/decentralized_dns/core",
     "//brave/components/ipfs",
@@ -855,6 +867,7 @@ source_set("unit_tests") {
       "zcash/zcash_auto_sync_manager_unittest.cc",
       "zcash/zcash_blocks_batch_scan_task_unittest.cc",
       "zcash/zcash_create_orchard_to_orchard_transaction_task_unittest.cc",
+      "zcash/zcash_create_orchard_to_transparent_transaction_task_unittest.cc",
       "zcash/zcash_create_transparent_to_orchard_transaction_task_unittest.cc",
       "zcash/zcash_get_chaintip_status_task_unittest.cc",
       "zcash/zcash_scan_blocks_task_unittest.cc",

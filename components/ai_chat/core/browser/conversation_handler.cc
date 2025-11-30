@@ -342,6 +342,14 @@ void ConversationHandler::InitEngine() {
 
 const mojom::Model& ConversationHandler::GetCurrentModel() {
   const mojom::Model* model = model_service_->GetModel(model_key_);
+  if (!model) {
+    // Model no longer exists (e.g., custom model was deleted)
+    // Fall back to the automatic model
+    DVLOG(1) << "Model " << model_key_
+             << " no longer exists, falling back to automatic model";
+    model_key_ = features::kAIModelsDefaultKey.Get();
+    model = model_service_->GetModel(model_key_);
+  }
   CHECK(model);
   return *model;
 }
@@ -382,7 +390,7 @@ void ConversationHandler::GetState(GetStateCallback callback) {
       model_key, default_model_key, std::move(suggestions),
       suggestion_generation_status_,
       associated_content_manager_->GetAssociatedContent(), current_error_,
-      metadata_->temporary);
+      metadata_->temporary, tool_use_task_state_);
 
   std::move(callback).Run(std::move(state));
 }
@@ -585,6 +593,12 @@ void ConversationHandler::SubmitHumanConversationEntry(
       });
     }
   }
+
+  // A new entry submission implies we should reset the task state. This ensures
+  // that if an unpause is received because of a new tool use request that we do
+  // not attempt to resume the tool loop when the tool is unpaused.
+  tool_use_task_state_ = mojom::TaskState::kNone;
+  OnToolUseTaskStateChanged();
 
   // Directly modify Entry's text to remove engine-breaking substrings
   if (!has_edits) {  // Edits are already sanitized.
@@ -1069,24 +1083,8 @@ void ConversationHandler::RespondToToolUseRequest(
 
   OnToolUseEventOutput(chat_history_.back().get(), tool_use);
 
-  // Only perform generation if there are no pending tools left to run from
-  // the last entry.
-  if (std::ranges::all_of(
-          *chat_history_.back()->events,
-          [](const mojom::ConversationEntryEventPtr& event) {
-            return !event->is_tool_use_event() ||
-                   event->get_tool_use_event()->output.has_value();
-          })) {
-    DVLOG(0) << "No more tool use requests to handle, performing generation";
-    is_request_in_progress_ = true;
-    is_tool_use_in_progress_ = false;
-    OnAPIRequestInProgressChanged();
-    PerformAssistantGenerationWithPossibleContent();
-  } else {
-    DVLOG(0) << "Tool use request handled, but still have more to handle";
-    // Still have more tool use requests to handle.
-    MaybeRespondToNextToolUseRequest();
-  }
+  // Run next tool, or perform generation with all the tools outputs
+  MaybeRespondToNextToolUseRequest();
 }
 
 void ConversationHandler::ProcessPermissionChallenge(
@@ -1121,10 +1119,7 @@ void ConversationHandler::ProcessPermissionChallenge(
     // This stops processing of any remaining tools in this turn
     DVLOG(0)
         << "Permission denied, stopping tool loop and performing generation";
-    is_request_in_progress_ = true;
-    is_tool_use_in_progress_ = false;
-    OnAPIRequestInProgressChanged();
-    PerformAssistantGenerationWithPossibleContent();
+    PerformPostToolAssistantGeneration();
     return;
   }
 
@@ -1178,6 +1173,9 @@ void ConversationHandler::InitToolsForNewGenerationLoop() {
   for (auto& tool_provider : tool_providers_) {
     tool_provider->OnNewGenerationLoop();
   }
+  // Remove state from any previous task
+  tool_use_task_state_ = mojom::TaskState::kNone;
+  OnToolUseTaskStateChanged();
 }
 
 void ConversationHandler::PerformAssistantGenerationWithPossibleContent() {
@@ -1220,6 +1218,18 @@ void ConversationHandler::PerformAssistantGeneration() {
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&ConversationHandler::OnEngineCompletionComplete,
                      weak_ptr_factory_.GetWeakPtr()));
+}
+
+void ConversationHandler::PerformPostToolAssistantGeneration() {
+  if (tool_use_task_state_ == mojom::TaskState::kPaused ||
+      tool_use_task_state_ == mojom::TaskState::kStopped) {
+    DVLOG(0) << "Tool loop is paused or stopped by user, skipping generation";
+    return;
+  }
+  is_request_in_progress_ = true;
+  is_tool_use_in_progress_ = false;
+  OnAPIRequestInProgressChanged();
+  PerformAssistantGenerationWithPossibleContent();
 }
 
 void ConversationHandler::SetAPIError(const mojom::APIError& error) {
@@ -1594,6 +1604,9 @@ void ConversationHandler::OnEngineCompletionComplete(
     // This is a workaround for any occasions where the engine returns
     // a success but there was no new entry.
     if (needs_new_entry_) {
+      // Still create the empty entry so that we know we already sent a
+      // generation request and we don't create an infinite loop.
+      UpdateOrCreateLastAssistantEntry(std::move(*result));
       SetAPIError(mojom::APIError::ConnectionIssue);
       CompleteGeneration(false);
       return;
@@ -1630,10 +1643,25 @@ void ConversationHandler::OnTitleGenerated(
 
 void ConversationHandler::CompleteGeneration(bool success) {
   is_request_in_progress_ = false;
+  OnAPIRequestInProgressChanged();
   if (success) {
     MaybePopPendingRequests();
+    if (!MaybeRespondToNextToolUseRequest()) {
+      // Inform tool providers that there are no more tool use requests to
+      // handle, that the loop is complete until a new message is submitted.
+      for (auto& tool_provider : tool_providers_) {
+        tool_provider->OnGenerationCompleteWithNoToolsToHandle();
+      }
+      // Remove internal task state now that it is complete. This marks the end
+      // of the tool use task loop.
+      tool_use_task_state_ = mojom::TaskState::kNone;
+      OnToolUseTaskStateChanged();
+    }
+  } else {
+    // Failure should stop any tool handling, and relay to ToolProviders because
+    // we can't resume. User will have to resubmit.
+    StopTask();
   }
-  MaybeRespondToNextToolUseRequest();
 }
 
 void ConversationHandler::OnSuggestedQuestionsResponse(
@@ -1702,6 +1730,83 @@ void ConversationHandler::OnContentTaskStarted(int32_t tab_id) {
   // Notify clients so they may display the relationship in UI
   for (auto& client : untrusted_conversation_ui_handlers_) {
     client->ContentTaskStarted(tab_id);
+  }
+}
+
+void ConversationHandler::PauseTask() {
+  // Allow pausing even if no task is active yet. This handles the case where
+  // a tool provider pauses during the generation callback, before
+  // MaybeRespondToNextToolUseRequest has initialized the task state.
+  // Don't allow moving from stopped to paused as that will create a state that
+  // can be resumed.
+  if (tool_use_task_state_ != mojom::TaskState::kPaused &&
+      tool_use_task_state_ != mojom::TaskState::kStopped) {
+    tool_use_task_state_ = mojom::TaskState::kPaused;
+    OnToolUseTaskStateChanged();
+    for (auto& tool_provider : tool_providers_) {
+      tool_provider->PauseAllTasks();
+    }
+  }
+
+  // We don't need to do anything further than set the task state to paused
+  // as the next action in an active tool loop will check that state.
+}
+
+void ConversationHandler::ResumeTask() {
+  // If not paused, nothing to do
+  if (tool_use_task_state_ != mojom::TaskState::kPaused) {
+    return;
+  }
+
+  // Set state before calling tool providers so we don't enter a loop via
+  // `OnTaskStateChanged` which calls this function again.
+  tool_use_task_state_ = mojom::TaskState::kRunning;
+
+  for (auto& tool_provider : tool_providers_) {
+    tool_provider->ResumeAllTasks();
+  }
+
+  OnToolUseTaskStateChanged();
+
+  // If a tool is currently in progress, don't call
+  // MaybeRespondToNextToolUseRequest now - it will be called when the tool
+  // completes via RespondToToolUseRequest.
+  if (is_tool_use_in_progress_) {
+    return;
+  }
+
+  MaybeRespondToNextToolUseRequest();
+}
+
+void ConversationHandler::StopTask() {
+  if (tool_use_task_state_ == mojom::TaskState::kNone) {
+    return;
+  }
+
+  tool_use_task_state_ = mojom::TaskState::kStopped;
+  OnToolUseTaskStateChanged();
+
+  for (auto& tool_provider : tool_providers_) {
+    tool_provider->StopAllTasks();
+  }
+}
+
+void ConversationHandler::OnTaskStateChanged(ToolProvider* tool_provider) {
+  // A ToolProvider's task state has changed. Propogate this to the
+  // conversation's task state.
+  DVLOG(4) << "OnTaskStateChanged: task_state="
+           << static_cast<int>(tool_use_task_state_) << " "
+           << is_request_in_progress_ << " " << is_tool_use_in_progress_;
+  if (tool_use_task_state_ == mojom::TaskState::kStopped) {
+    return;
+  }
+
+  if (tool_provider->IsPausedByUser()) {
+    // Pausing from a single tool provider pauses the entire task
+    PauseTask();
+  } else {
+    // Resuming from a single tool provider resumes the entire task
+    ResumeTask();
   }
 }
 
@@ -1820,8 +1925,9 @@ ConversationHandler::GetStateForConversationEntries() {
   mojom::ConversationEntriesStatePtr entries_state =
       mojom::ConversationEntriesState::New();
 
-  entries_state->is_generating =
-      IsRequestInProgress() || is_tool_use_in_progress_;
+  entries_state->is_generating = IsRequestInProgress();
+  entries_state->is_tool_executing = is_tool_use_in_progress_;
+  entries_state->tool_use_task_state = tool_use_task_state_;
   entries_state->is_leo_model = is_leo_model;
   entries_state->all_models = std::move(models_copy);
   entries_state->current_model_key = model.key;
@@ -1892,11 +1998,17 @@ void ConversationHandler::OnSuggestedQuestionsChanged() {
 void ConversationHandler::OnAPIRequestInProgressChanged() {
   OnStateForConversationEntriesChanged();
   for (auto& client : conversation_ui_handlers_) {
-    client->OnAPIRequestInProgress(is_request_in_progress_ ||
-                                   is_tool_use_in_progress_);
+    client->OnAPIRequestInProgress(is_request_in_progress_);
   }
   for (auto& observer : observers_) {
     observer.OnRequestInProgressChanged(this, is_request_in_progress_);
+  }
+}
+
+void ConversationHandler::OnToolUseTaskStateChanged() {
+  OnStateForConversationEntriesChanged();
+  for (auto& client : conversation_ui_handlers_) {
+    client->OnTaskStateChanged(tool_use_task_state_);
   }
 }
 
@@ -1951,7 +2063,7 @@ mojom::ToolUseEvent* ConversationHandler::GetToolUseEventForLastResponse(
   return nullptr;
 }
 
-void ConversationHandler::MaybeRespondToNextToolUseRequest() {
+bool ConversationHandler::MaybeRespondToNextToolUseRequest() {
   // Continue the loop of tool use handling and completion continuing until
   // either:
   // - A response comes back with no tool use requests
@@ -1962,13 +2074,16 @@ void ConversationHandler::MaybeRespondToNextToolUseRequest() {
   OnAPIRequestInProgressChanged();
 
   if (chat_history_.empty()) {
-    return;
+    return false;
   }
   auto& last_entry = chat_history_.back();
   if (last_entry->character_type != mojom::CharacterType::ASSISTANT ||
       last_entry->events->size() == 0) {
-    return;
+    return false;
   }
+
+  bool has_pending_tool_use_request = false;
+  bool has_only_completed_tool_use_events = false;
 
   // Handle one tool at a time and wait for its response
   // before handling the next one
@@ -1977,7 +2092,26 @@ void ConversationHandler::MaybeRespondToNextToolUseRequest() {
       auto& tool_use_event = event->get_tool_use_event();
       if (tool_use_event->output != std::nullopt) {
         // already handled
+        has_only_completed_tool_use_events = true;
         continue;
+      }
+
+      has_pending_tool_use_request = true;
+      has_only_completed_tool_use_events = false;
+
+      // Initialize the task state for this tool loop if not already set.
+      // PauseTask() may have already set it to kPaused before we get here.
+      if (tool_use_task_state_ == mojom::TaskState::kNone) {
+        tool_use_task_state_ = mojom::TaskState::kRunning;
+        OnToolUseTaskStateChanged();
+      }
+
+      // Now check if we're allowed to execute tools.
+      if (tool_use_task_state_ == mojom::TaskState::kPaused ||
+          tool_use_task_state_ == mojom::TaskState::kStopped) {
+        DVLOG(0) << "Tool loop is paused or stopped by user, not executing any "
+                    "tools.";
+        break;
       }
 
       // Check for existing permission challenge that hasn't been
@@ -2050,6 +2184,11 @@ void ConversationHandler::MaybeRespondToNextToolUseRequest() {
       }
 
       // No user interaction needed - execute tool
+
+      // At this point task state should be kRunning (not paused, stopped, or
+      // none) since we initialized it earlier and checked for pause/stop above.
+      CHECK_EQ(tool_use_task_state_, mojom::TaskState::kRunning);
+
       is_tool_use_in_progress_ = true;
       OnAPIRequestInProgressChanged();
       DVLOG(0) << __func__ << " calling UseTool for tool: " << tool_ptr->Name();
@@ -2061,6 +2200,14 @@ void ConversationHandler::MaybeRespondToNextToolUseRequest() {
       break;
     }
   }
+
+  // If there's nothing to do but send results, and there is no request in
+  // progress, then we must be resuming from a previous cancellation
+  if (has_only_completed_tool_use_events && !is_request_in_progress_) {
+    PerformPostToolAssistantGeneration();
+  }
+
+  return has_pending_tool_use_request;
 }
 
 size_t ConversationHandler::GetConversationHistorySize() {

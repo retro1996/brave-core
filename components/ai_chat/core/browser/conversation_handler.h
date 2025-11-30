@@ -179,6 +179,9 @@ class ConversationHandler : public mojom::ConversationHandler,
   void GetState(GetStateCallback callback) override;
   void GetConversationHistory(GetConversationHistoryCallback callback) override;
   void SetTemporary(bool temporary) override;
+  void PauseTask() override;
+  void ResumeTask() override;
+  void StopTask() override;
   void RateMessage(bool is_liked,
                    const std::string& turn_uuid,
                    RateMessageCallback callback) override;
@@ -304,6 +307,7 @@ class ConversationHandler : public mojom::ConversationHandler,
 
   // ToolProvider::Observer
   void OnContentTaskStarted(int32_t tab_id) override;
+  void OnTaskStateChanged(ToolProvider* tool_provider) override;
 
  private:
   friend class ::AIChatUIBrowserTest;
@@ -345,6 +349,11 @@ class ConversationHandler : public mojom::ConversationHandler,
   void PerformAssistantGenerationWithPossibleContent();
 
   void PerformAssistantGeneration();
+
+  // When the current batch of tool use requests has been completed, we can
+  // send the results to the engine and wait for the next response for the loop.
+  void PerformPostToolAssistantGeneration();
+
   void SetAPIError(const mojom::APIError& error);
   void UpdateOrCreateLastAssistantEntry(
       EngineConsumer::GenerationResultData result);
@@ -387,10 +396,13 @@ class ConversationHandler : public mojom::ConversationHandler,
   void OnConversationUIConnectionChanged(mojo::RemoteSetElementId id);
   void OnSelectedLanguageChanged(const std::string& selected_language);
   void OnAPIRequestInProgressChanged();
+  void OnToolUseTaskStateChanged();
   void OnStateForConversationEntriesChanged();
 
   mojom::ToolUseEvent* GetToolUseEventForLastResponse(std::string_view tool_id);
-  void MaybeRespondToNextToolUseRequest();
+
+  // Returns true if there are any more tool use requests to handle
+  bool MaybeRespondToNextToolUseRequest();
 
   // We don't own all the available tools for the conversation as:
   // - The available tools can change over time.
@@ -419,6 +431,7 @@ class ConversationHandler : public mojom::ConversationHandler,
 
   // Are we currently performing a loop of tool uses?
   bool is_tool_use_in_progress_ = false;
+  mojom::TaskState tool_use_task_state_ = mojom::TaskState::kNone;
 
   // Keep track of whether we've generated suggested questions for the current
   // context. We cannot rely on counting the questions in |suggested_questions_|

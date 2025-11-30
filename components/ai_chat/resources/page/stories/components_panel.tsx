@@ -962,6 +962,7 @@ const ASSOCIATED_CONTENT: Mojom.AssociatedContent = {
 type CustomArgs = {
   initialized: boolean
   currentErrorState: keyof typeof Mojom.APIError
+  toolUseTaskState: keyof typeof Mojom.TaskState
   model: string
   inputText: Content
   hasConversation: boolean
@@ -991,6 +992,7 @@ type CustomArgs = {
   totalTokens: number
   trimmedTokens: number
   isGenerating: boolean
+  isToolExecuting: boolean
   attachmentsDialog: 'tabs' | 'bookmarks' | 'history' | null
   isNewConversation: boolean
   generatedUrlToBeOpened: Url | undefined
@@ -1024,6 +1026,7 @@ const args: CustomArgs = {
   isPremiumUser: true,
   isPremiumUserDisconnected: false,
   currentErrorState: 'ConnectionIssue' satisfies keyof typeof Mojom.APIError,
+  toolUseTaskState: 'kNone' satisfies keyof typeof Mojom.TaskState,
   suggestionStatus:
     'None' satisfies keyof typeof Mojom.SuggestionGenerationStatus,
   model: MODELS[0].key,
@@ -1039,6 +1042,7 @@ const args: CustomArgs = {
   totalTokens: 0,
   trimmedTokens: 0,
   isGenerating: false,
+  isToolExecuting: false,
   attachmentsDialog: null,
   isNewConversation: false,
   generatedUrlToBeOpened: undefined,
@@ -1061,6 +1065,10 @@ const meta: Meta<CustomArgs> = {
     ...InferControlsFromArgs(args),
     currentErrorState: {
       options: getKeysForMojomEnum(Mojom.APIError),
+      control: { type: 'select' },
+    },
+    toolUseTaskState: {
+      options: getKeysForMojomEnum(Mojom.TaskState),
       control: { type: 'select' },
     },
     suggestionStatus: {
@@ -1299,6 +1307,7 @@ function StoryContext(
     currentModel,
     suggestedQuestions,
     isGenerating: options.args.isGenerating,
+    toolUseTaskState: Mojom.TaskState[options.args.toolUseTaskState],
     suggestionStatus:
       Mojom.SuggestionGenerationStatus[options.args.suggestionStatus],
     currentError,
@@ -1377,6 +1386,9 @@ function StoryContext(
     isDragOver: options.args.isDragOver,
     clearDragState: () => {},
     attachImages: (images: Mojom.UploadedFile[]) => {},
+    pauseTask: () => {},
+    resumeTask: () => {},
+    stopTask: () => {},
     unassociatedTabs: aiChatContext.tabs,
     associateDefaultContent: async () => {},
   }
@@ -1385,6 +1397,8 @@ function StoryContext(
     conversationHistory: conversationContext.conversationHistory,
     conversationCapability: Mojom.ConversationCapability.CONTENT_AGENT,
     isGenerating: conversationContext.isGenerating,
+    isToolExecuting: args.isToolExecuting,
+    toolUseTaskState: conversationContext.toolUseTaskState,
     isLeoModel: conversationContext.isCurrentModelLeo,
     contentUsedPercentage: options.args.shouldShowLongPageWarning ? 48 : 100,
     visualContentUsedPercentage: options.args.shouldShowLongVisualContentWarning
@@ -1536,6 +1550,7 @@ export const _ToolUse = {
             <ToolEvent
               key={event.toolUseEvent!.id}
               toolUseEvent={event.toolUseEvent!}
+              isExecuting={args.isToolExecuting}
               isEntryActive
             ></ToolEvent>
           ))}

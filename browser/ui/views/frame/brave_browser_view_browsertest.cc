@@ -11,8 +11,11 @@
 #include "base/test/scoped_feature_list.h"
 #include "brave/browser/ui/bookmark/bookmark_helper.h"
 #include "brave/browser/ui/browser_commands.h"
+#include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/views/frame/brave_browser_view.h"
 #include "brave/browser/ui/views/frame/brave_contents_view_util.h"
+#include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h"
+#include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_widget_delegate_view.h"
 #include "brave/browser/ui/views/sidebar/sidebar_container_view.h"
 #include "brave/common/pref_names.h"
 #include "build/build_config.h"
@@ -42,9 +45,14 @@
 #include "ui/compositor/layer.h"
 #include "ui/gfx/animation/animation.h"
 #include "ui/gfx/animation/animation_test_api.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
+
+using views::ShapeContextTokensOverride::kRoundedCornersBorderRadius;
+using views::ShapeContextTokensOverride::
+    kRoundedCornersBorderRadiusAtWindowCorner;
 
 class BraveBrowserViewTest : public InProcessBrowserTest {
  public:
@@ -215,6 +223,28 @@ class BraveBrowserViewWithRoundedCornersTest
                         split_tabs::SplitTabCreatedSource::kToolbarButton);
   }
 
+  BrowserFrameView* browser_non_client_frame_view() {
+    return browser_view()->browser_widget()->GetFrameView();
+  }
+
+  void ToggleVerticalTabStrip() {
+    brave::ToggleVerticalTabStrip(browser());
+    browser_non_client_frame_view()->DeprecatedLayoutImmediately();
+  }
+
+  void SetHideCompletelyWhenCollapsed(bool hide) {
+    browser()->profile()->GetPrefs()->SetBoolean(
+        brave_tabs::kVerticalTabsHideCompletelyWhenCollapsed, hide);
+  }
+
+  BraveVerticalTabStripRegionView* vertical_tab_strip_region() {
+    auto* widget_delegate_view =
+        BraveBrowserView::From(browser_view())
+            ->vertical_tab_strip_widget_delegate_view();
+
+    return widget_delegate_view->vertical_tab_strip_region_view();
+  }
+
   bool IsRoundedCornersEnabled() const { return GetParam(); }
 };
 
@@ -254,6 +284,13 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
   views::View* side_panel = browser_view()->contents_height_side_panel();
   const auto rounded_corners_margin = BraveContentsViewUtil::kMarginThickness;
 
+  auto* layout_provider = views::LayoutProvider::Get();
+  const auto rounded_corners_border_radius =
+      layout_provider->GetCornerRadiusMetric(kRoundedCornersBorderRadius);
+  const auto rounded_corners_border_radius_at_window_corner =
+      layout_provider->GetCornerRadiusMetric(
+          kRoundedCornersBorderRadiusAtWindowCorner);
+
   if (IsRoundedCornersEnabled()) {
     // Check contents container has margin by comparing simply its left & bottom
     // with main container's local bounds. As views local bounds' origin is (0,
@@ -269,8 +306,23 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
               side_panel->GetProperty(views::kMarginsKey)->bottom());
     EXPECT_EQ(rounded_corners_margin,
               side_panel->GetProperty(views::kMarginsKey)->right());
-    EXPECT_EQ(gfx::RoundedCornersF(BraveContentsViewUtil::kBorderRadius),
+    EXPECT_EQ(gfx::RoundedCornersF(rounded_corners_border_radius),
               side_panel->layer()->rounded_corner_radii());
+    const auto contents_view_radii = browser_view()
+                                         ->GetActiveContentsContainerView()
+                                         ->contents_view()
+                                         ->GetBackgroundRadii();
+    EXPECT_EQ(BraveContentsViewUtil::GetRoundedCornersForContentsView(browser(),
+                                                                      nullptr),
+              contents_view_radii);
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_left());
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_right());
+
+    // lower-left radius should be radius around window as there is no ui
+    // between browser window border and contents.
+    EXPECT_EQ(rounded_corners_border_radius_at_window_corner,
+              contents_view_radii.lower_left());
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.lower_right());
   } else {
     // Check contents container doesn't have any margin. So, contents container
     // should have same left & bottom with main container.
@@ -286,6 +338,10 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
 
     // Panel doesn't have layer when its shadow is not set.
     EXPECT_FALSE(side_panel->layer());
+    EXPECT_EQ(gfx::RoundedCornersF(), browser_view()
+                                          ->GetActiveContentsContainerView()
+                                          ->contents_view()
+                                          ->GetBackgroundRadii());
   }
 
   // Create split tab and check contents container/sidebar has rounded corners
@@ -302,8 +358,25 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
             side_panel->GetProperty(views::kMarginsKey)->bottom());
   EXPECT_EQ(rounded_corners_margin,
             side_panel->GetProperty(views::kMarginsKey)->right());
-  EXPECT_EQ(gfx::RoundedCornersF(BraveContentsViewUtil::kBorderRadius),
+  EXPECT_EQ(gfx::RoundedCornersF(rounded_corners_border_radius),
             side_panel->layer()->rounded_corner_radii());
+
+  const auto start_contents_view_radii = browser_view()
+                                             ->GetContentsContainerViews()[0]
+                                             ->contents_view()
+                                             ->GetBackgroundRadii();
+  const auto end_contents_view_radii = browser_view()
+                                           ->GetContentsContainerViews()[1]
+                                           ->contents_view()
+                                           ->GetBackgroundRadii();
+  EXPECT_EQ(rounded_corners_border_radius_at_window_corner,
+            start_contents_view_radii.lower_left());
+  EXPECT_EQ(rounded_corners_border_radius,
+            start_contents_view_radii.lower_right());
+  EXPECT_EQ(rounded_corners_border_radius,
+            end_contents_view_radii.lower_left());
+  EXPECT_EQ(rounded_corners_border_radius,
+            end_contents_view_radii.lower_right());
 
   // Create new active tab to not have split tab as a active tab.
   // Check contents container doesn't have margin when rounded corners is
@@ -320,8 +393,23 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
               side_panel->GetProperty(views::kMarginsKey)->bottom());
     EXPECT_EQ(rounded_corners_margin,
               side_panel->GetProperty(views::kMarginsKey)->right());
-    EXPECT_EQ(gfx::RoundedCornersF(BraveContentsViewUtil::kBorderRadius),
+    EXPECT_EQ(gfx::RoundedCornersF(rounded_corners_border_radius),
               side_panel->layer()->rounded_corner_radii());
+    const auto contents_view_radii = browser_view()
+                                         ->GetActiveContentsContainerView()
+                                         ->contents_view()
+                                         ->GetBackgroundRadii();
+    EXPECT_EQ(BraveContentsViewUtil::GetRoundedCornersForContentsView(browser(),
+                                                                      nullptr),
+              contents_view_radii);
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_left());
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_right());
+
+    // lower-left radius should be radius around window as there is no ui
+    // between browser window border and contents.
+    EXPECT_EQ(rounded_corners_border_radius_at_window_corner,
+              contents_view_radii.lower_left());
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.lower_right());
   } else {
     EXPECT_EQ(contents_container->bounds().x(),
               main_container->GetLocalBounds().x());
@@ -331,6 +419,48 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
     EXPECT_EQ(0, side_panel->GetProperty(views::kMarginsKey)->bottom());
     EXPECT_EQ(0, side_panel->GetProperty(views::kMarginsKey)->right());
     EXPECT_FALSE(side_panel->layer());
+    EXPECT_EQ(gfx::RoundedCornersF(), browser_view()
+                                          ->GetActiveContentsContainerView()
+                                          ->contents_view()
+                                          ->GetBackgroundRadii());
+  }
+
+  // Test with vertical tab.
+  ToggleVerticalTabStrip();
+  if (IsRoundedCornersEnabled()) {
+    auto contents_view_radii = browser_view()
+                                   ->GetActiveContentsContainerView()
+                                   ->contents_view()
+                                   ->GetBackgroundRadii();
+
+    // use border radius as it has left side ui.
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.lower_left());
+
+    // use window corner border radius as vetical tab is hidden.
+    SetHideCompletelyWhenCollapsed(true);
+
+    auto* region_view = vertical_tab_strip_region();
+    contents_view_radii = browser_view()
+                              ->GetActiveContentsContainerView()
+                              ->contents_view()
+                              ->GetBackgroundRadii();
+
+    // still use border radius as it's expanded state.
+    EXPECT_EQ(BraveVerticalTabStripRegionView::State::kExpanded,
+              region_view->state());
+    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.lower_left());
+
+    region_view->ToggleState();
+    contents_view_radii = browser_view()
+                              ->GetActiveContentsContainerView()
+                              ->contents_view()
+                              ->GetBackgroundRadii();
+
+    // use border radius at window as it's collapsed state.
+    EXPECT_EQ(BraveVerticalTabStripRegionView::State::kCollapsed,
+              region_view->state());
+    EXPECT_EQ(rounded_corners_border_radius_at_window_corner,
+              contents_view_radii.lower_left());
   }
 }
 

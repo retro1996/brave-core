@@ -6,6 +6,12 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_PREF_NAMES_H_
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_PREF_NAMES_H_
 
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
+
+static_assert(BUILDFLAG(ENABLE_BRAVE_WALLET));
+
+namespace brave_wallet {
+
 inline constexpr char kShouldShowWalletSuggestionBadge[] =
     "brave.wallet.should_show_wallet_suggestion_badge";
 inline constexpr char kDefaultEthereumWallet[] = "brave.wallet.default_wallet2";
@@ -83,6 +89,10 @@ inline constexpr char kBraveWalletLegacyEthSeedFormat[] =
 inline constexpr char kBraveWalletMnemonicBackedUp[] =
     "brave.wallet.mnemonic_backed_up";
 
+// Used to enable/disable Brave Wallet via a policy.
+inline constexpr char kBraveWalletDisabledByPolicy[] =
+    "brave.wallet.disabled_by_policy";
+
 // Added 06/2024 to migrate Eip1559 flag to a separate pref.
 inline constexpr char kBraveWalletEip1559ForCustomNetworksMigrated[] =
     "brave.wallet.eip1559_chains_migrated";
@@ -113,5 +123,7 @@ inline constexpr char kERCEncryptedSeedDeprecated[] =
 inline constexpr char kERCPrefVersionDeprecated[] = "brave.wallet.pref_version";
 inline constexpr char kERCOptedIntoCryptoWalletsDeprecated[] =
     "brave.wallet.opted_in";
+
+}  // namespace brave_wallet
 
 #endif  // BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_PREF_NAMES_H_

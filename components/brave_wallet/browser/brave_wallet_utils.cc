@@ -24,7 +24,7 @@
 #include "brave/components/brave_wallet/browser/pref_names.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
-#include "brave/components/brave_wallet/common/buildflags.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/brave_wallet/common/cardano_address.h"
 #include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/eth_address.h"
@@ -34,6 +34,7 @@
 #include "brave/components/constants/brave_services_key.h"
 #include "brave/components/constants/webui_url_constants.h"
 #include "brave/components/version_info/version_info.h"
+#include "build/build_config.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "crypto/random.h"
@@ -44,6 +45,16 @@
 namespace brave_wallet {
 
 namespace {
+
+bool IsDisabledByPolicy(PrefService* prefs) {
+#if BUILDFLAG(IS_ANDROID)
+  return false;
+#else
+  DCHECK(prefs);
+  return prefs->IsManagedPreference(kBraveWalletDisabledByPolicy) &&
+         prefs->GetBoolean(kBraveWalletDisabledByPolicy);
+#endif
+}
 
 constexpr const char kEnsRegistryContractAddress[] =
     "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
@@ -190,10 +201,15 @@ bool EncodeStringArrayInternal(base::span<const StringType> input,
 
 }  // namespace
 
+bool IsAllowed(PrefService* prefs) {
+  return !IsDisabledByPolicy(prefs);
+}
+
 bool IsEndpointUsingBraveWalletProxy(const GURL& url) {
   return url.DomainIs("wallet.brave.com") ||
          url.DomainIs("wallet.bravesoftware.com") ||
-         url.DomainIs("wallet.s.brave.io");
+         url.DomainIs("wallet.s.brave.io") ||
+         url.DomainIs("wallet.brave.software");
 }
 
 base::flat_map<std::string, std::string> MakeBraveServicesKeyHeaders() {
@@ -221,7 +237,7 @@ bool EncodeString(std::string_view input, std::string* output) {
   }
 
   // Encode string.
-  *output += base::ToLowerASCII(base::HexEncode(input.data(), input.size()));
+  *output += base::HexEncodeLower(input);
 
   // Pad 0 to right.
   size_t last_row_len = input.size() % 32;
@@ -776,6 +792,10 @@ std::string WalletInsufficientBalanceErrorMessage() {
 
 std::string WalletUserRejectedRequestErrorMessage() {
   return l10n_util::GetStringUTF8(IDS_WALLET_USER_REJECTED_REQUEST);
+}
+
+std::string WalletAmountTooSmallErrorMessage() {
+  return l10n_util::GetStringUTF8(IDS_BRAVE_WALLET_AMOUNT_TOO_SMALL_ERROR);
 }
 
 mojom::BlockchainTokenPtr GetBitcoinNativeToken(std::string_view chain_id) {

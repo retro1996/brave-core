@@ -115,7 +115,7 @@ class DebounceBrowserTest : public BaseLocalDataFilesBrowserTest {
   // BaseLocalDataFilesBrowserTest overrides
   const char* test_data_directory() override { return kTestDataDirectory; }
   const char* embedded_test_server_directory() override { return ""; }
-  LocalDataFilesObserver* service() override {
+  brave_component_updater::LocalDataFilesObserver* service() override {
     return g_brave_browser_process->debounce_component_installer();
   }
 
@@ -178,13 +178,18 @@ class DebounceBrowserTest : public BaseLocalDataFilesBrowserTest {
   void InitAdBlockForDebounce() {
     auto source_provider =
         std::make_unique<brave_shields::TestFiltersProvider>("||blocked.com^");
-    g_brave_browser_process->ad_block_service()->UseSourceProviderForTest(
-        source_provider.get());
+    source_provider->RegisterAsSourceProvider(
+        g_brave_browser_process->ad_block_service());
     source_providers_.push_back(std::move(source_provider));
     auto* engine =
         g_brave_browser_process->ad_block_service()->default_engine_.get();
     EngineTestObserver engine_observer(engine);
     engine_observer.Wait();
+  }
+
+  void PostRunTestOnMainThread() override {
+    source_providers_.clear();
+    BaseLocalDataFilesBrowserTest::PostRunTestOnMainThread();
   }
 
  private:

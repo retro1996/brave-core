@@ -18,7 +18,7 @@
 #include "brave/components/brave_shields/core/browser/brave_shields_locale_utils.h"
 #include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/brave_wallet/browser/pref_names.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/brave_wayback_machine/buildflags/buildflags.h"
 #include "brave/components/brave_wayback_machine/pref_names.h"
 #include "brave/components/commander/common/features.h"
@@ -58,6 +58,10 @@
 
 #if BUILDFLAG(ENABLE_TOR)
 #include "brave/browser/tor/tor_profile_service_factory.h"
+#endif
+
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+#include "brave/components/brave_wallet/browser/pref_names.h"
 #endif
 
 namespace settings {
@@ -316,6 +320,10 @@ void BraveAddCommonStrings(content::WebUIDataSource* html_source,
       {"vpnPageTitle", IDS_SETTINGS_VPN_PAGE_TITLE},
       {"useWireguardLabel", IDS_SETTINGS_VPN_PAGE_USE_WIREGUARD_TITLE},
       {"sublabelVpnConnected", IDS_SETTINGS_VPN_PAGE_SUBLABEL_VPN_CONNECTED},
+      {"showInSystemTrayWindows",
+       IDS_SETTINGS_VPN_PAGE_SHOW_IN_SYSTEM_TRAY_WINDOWS},
+      {"showInSystemTrayWindowsSubLabel",
+       IDS_SETTINGS_VPN_PAGE_SHOW_IN_SYSTEM_TRAY_WINDOWS_SUBLABEL},
 #endif
 #if BUILDFLAG(IS_MAC)
       {"showToolbarInFullScreen", IDS_SHOW_TOOLBAR_IN_FULL_SCREEN},
@@ -1096,14 +1104,17 @@ void BraveAddCommonStrings(content::WebUIDataSource* html_source,
               GURL(extension_urls::GetWebstoreExtensionsCategoryURL()),
               g_browser_process->GetApplicationLocale())
               .spec()));
+
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
   html_source->AddString("autoLockMinutesValue",
                          base::NumberToString(profile->GetPrefs()->GetInteger(
-                             kBraveWalletAutoLockMinutes)));
+                             brave_wallet::kBraveWalletAutoLockMinutes)));
 
   html_source->AddString(
       "transactionSimulationDesc",
       l10n_util::GetStringFUTF16(IDS_BRAVE_WALLET_TRANSACTION_SIMULATIONS_DESC,
                                  kTransactionSimulationLearnMoreURL));
+#endif
 
   html_source->AddString("resolveUnstoppableDomainsSubDesc",
                          l10n_util::GetStringFUTF16(

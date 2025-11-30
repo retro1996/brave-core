@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/feature_list.h"
+#include "brave/browser/brave_browser_features.h"
 #include "brave/browser/brave_shields/brave_shields_web_contents_observer.h"
 #include "brave/browser/new_tab/new_tab_shows_options.h"
 #include "brave/browser/search_engines/search_engine_tracker.h"
@@ -38,7 +39,7 @@
 #include "brave/components/brave_shields/core/common/pref_names.h"
 #include "brave/components/brave_sync/brave_sync_prefs.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/brave_wallet/browser/brave_wallet_prefs.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/brave_wayback_machine/buildflags/buildflags.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/containers/buildflags/buildflags.h"
@@ -152,6 +153,10 @@ using extensions::FeatureSwitch;
 #include "brave/components/containers/core/browser/prefs.h"
 #endif
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+#include "brave/components/brave_wallet/browser/brave_wallet_prefs.h"
+#endif
+
 namespace brave {
 
 namespace {
@@ -183,9 +188,8 @@ void OverrideDefaultPrefValues(user_prefs::PrefRegistrySyncable* registry) {
 #else
   // Turn on most visited mode on NTP by default.
   // We can turn customization mode on when we have add-shortcut feature.
-  registry->SetDefaultPrefValue(
-      ntp_prefs::kNtpShortcutsType,
-      base::Value(static_cast<int>(ntp_tiles::TileType::kTopSites)));
+  registry->SetDefaultPrefValue(ntp_prefs::kNtpCustomLinksVisible,
+                                base::Value(false));
 
   registry->SetDefaultPrefValue(
       bookmarks_webui::prefs::kBookmarksViewType,
@@ -272,7 +276,9 @@ void RegisterProfilePrefsForMigration(
   // Added 10/2025
   registry->RegisterBooleanPref(dark_mode::kBraveDarkModeMigrated, false);
 #endif
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
   brave_wallet::RegisterProfilePrefsForMigration(registry);
+#endif
 
   // Restore "Other Bookmarks" migration
   registry->RegisterBooleanPref(kOtherBookmarksMigrated, false);
@@ -460,8 +466,10 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   NTPBackgroundPrefs::RegisterPref(registry);
 #endif
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
   // Brave Wallet
   brave_wallet::RegisterProfilePrefs(registry);
+#endif
 
 #if BUILDFLAG(ENABLE_PSST)
   psst::RegisterProfilePrefs(registry);
@@ -511,7 +519,9 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(kEnableWindowClosingConfirm, true);
   registry->RegisterBooleanPref(kEnableClosingLastTab, true);
   registry->RegisterBooleanPref(kShowFullscreenReminder, true);
-  registry->RegisterBooleanPref(kWebViewRoundedCorners, true);
+  registry->RegisterBooleanPref(
+      kWebViewRoundedCorners,
+      base::FeatureList::IsEnabled(features::kBraveRoundedCornersByDefault));
 
   brave_tabs::RegisterBraveProfilePrefs(registry);
 

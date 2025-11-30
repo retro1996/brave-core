@@ -19,11 +19,8 @@ export interface Props<T> {
   footer?: React.ReactNode
   noMatchesMessage?: React.ReactNode
 
-  matchesQuery: (
-    query: string,
-    entry: T,
-    category?: string,
-  ) => boolean | undefined
+  // Note: -1 means no match.
+  matchesQuery: (query: string, entry: T, category?: string) => number
 
   children: (entry: T, category?: string) => React.ReactNode
 }
@@ -36,9 +33,18 @@ export default function FilterMenu<T>(props: Props<T>) {
         : props.categories
             .map((g) => ({
               ...g,
-              entries: g.entries.filter((entry) =>
-                props.matchesQuery(props.query!, entry, g.category),
-              ),
+              entries: g.entries
+                .map(
+                  (entry) =>
+                    [
+                      props.matchesQuery(props.query!, entry, g.category),
+                      entry,
+                    ] as const,
+                )
+                // Note: -1 means no match.
+                .filter(([rank]) => rank !== -1)
+                .sort((a, b) => a[0] - b[0])
+                .map(([_, entry]) => entry),
             }))
             .filter((g) => g.entries.length > 0),
     [props.query, props.categories],
@@ -64,12 +70,17 @@ export default function FilterMenu<T>(props: Props<T>) {
       }
 
       const focused = ref.current?.querySelector<HTMLElement>(':focus')
-      if (e.key === 'Enter') {
+      // If there isn't a focused element, click the first menu item, if any.
+      const menuItem =
+        focused ?? ref.current?.querySelector<HTMLElement>('leo-menu-item')
+
+      const accepts =
+        e.key === 'Enter'
+        || e.key === 'Tab'
+        || (e.key === ' ' && !menuItem?.textContent?.includes(' '))
+      if (accepts) {
         setHandled()
 
-        // If there isn't a focused element, click the first menu item, if any.
-        const menuItem =
-          focused ?? ref.current?.querySelector<HTMLElement>('leo-menu-item')
         if (!menuItem) return
 
         menuItem.click()

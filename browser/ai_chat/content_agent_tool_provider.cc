@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/containers/fixed_flat_set.h"
 #include "brave/browser/ai_chat/page_content_blocks.h"
 #include "brave/browser/ai_chat/tools/click_tool.h"
 #include "brave/browser/ai_chat/tools/drag_and_release_tool.h"
@@ -42,6 +43,19 @@ static_assert(BUILDFLAG(ENABLE_BRAVE_AI_CHAT_AGENT_PROFILE));
 
 namespace ai_chat {
 
+namespace {
+
+constexpr auto kActorStatesToNotify =
+    base::MakeFixedFlatSet<actor::ActorTask::State>({
+        actor::ActorTask::State::kPausedByUser,
+        actor::ActorTask::State::kPausedByActor,
+        actor::ActorTask::State::kActing,
+        actor::ActorTask::State::kReflecting,
+        actor::ActorTask::State::kWaitingOnUser,
+    });
+
+}  // namespace
+
 ContentAgentToolProvider::ContentAgentToolProvider(
     Profile* profile,
     actor::ActorKeyedService* actor_service)
@@ -62,10 +76,19 @@ ContentAgentToolProvider::ContentAgentToolProvider(
   // we should create a new task inside `ToolProvider::OnNewGenerationLoop`.
   task_id_ = actor_service_->CreateTask();
 
+  actor_task_state_changed_subscription_ =
+      actor_service_->AddTaskStateChangedCallback(base::BindRepeating(
+          &ContentAgentToolProvider::OnActorTaskStateChanged,
+          base::Unretained(this)));
+
   CreateTools();
 }
 
-ContentAgentToolProvider::~ContentAgentToolProvider() = default;
+ContentAgentToolProvider::~ContentAgentToolProvider() {
+  // When this tool provider and its owned uses (e.g. conversation)are closed,
+  // we should hand back state of the tab to regular uses of the browser.
+  StopAllTasks();
+}
 
 std::vector<base::WeakPtr<Tool>> ContentAgentToolProvider::GetTools() {
   // Note: We don't have the ability to filter tools based on conversation
@@ -79,12 +102,41 @@ std::vector<base::WeakPtr<Tool>> ContentAgentToolProvider::GetTools() {
   return tool_ptrs;
 }
 
+void ContentAgentToolProvider::OnGenerationCompleteWithNoToolsToHandle() {
+  // Marks all tools for this round of the loop being completed, we can return
+  // control back to the tab(s).
+  StopAllTasks();
+}
+
+void ContentAgentToolProvider::PauseAllTasks() {
+  // When user asks to pause the task, we can return control to the tabs.
+  if (!task_id_.is_null()) {
+    actor_service_->GetTask(task_id_)->Pause(false);
+  }
+}
+
+void ContentAgentToolProvider::ResumeAllTasks() {
+  if (!task_id_.is_null()) {
+    actor_service_->GetTask(task_id_)->Resume();
+  }
+}
+
 void ContentAgentToolProvider::StopAllTasks() {
   if (!task_id_.is_null()) {
-    // `success` sets whether the task ends as state kFinished or kCancelled
-    actor_service_->StopTask(task_id_,
+    actor::TaskId stopping_task_id = std::move(task_id_);
+    task_id_ = actor_service_->CreateTask();
+    actor_service_->StopTask(stopping_task_id,
                              actor::ActorTask::StoppedReason::kTaskComplete);
   }
+}
+
+bool ContentAgentToolProvider::IsPausedByUser() {
+  // Tools shouldn't be attempted to run whilst actor task is paused by user
+  actor::ActorTask* task = actor_service_->GetTask(task_id_);
+  if (!task) {
+    return false;
+  }
+  return task->IsUnderUserControl();
 }
 
 actor::TaskId ContentAgentToolProvider::GetTaskId() {
@@ -115,6 +167,7 @@ void ContentAgentToolProvider::GetOrCreateTabHandleForTask(
       task_tab_handle_,
       base::BindOnce(&ContentAgentToolProvider::TabAddedToTask,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  actor_service_->GetTask(task_id_)->Resume();
 }
 
 void ContentAgentToolProvider::TabAddedToTask(
@@ -140,6 +193,15 @@ void ContentAgentToolProvider::ExecuteActions(
       actor::ActorTaskMetadata(),
       base::BindOnce(&ContentAgentToolProvider::OnActionsFinished,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ContentAgentToolProvider::OnActorTaskStateChanged(
+    const actor::ActorTask& task) {
+  DVLOG(4) << __func__ << " " << task.GetState();
+  if (!task.id().is_null() && task.id() == task_id_ &&
+      kActorStatesToNotify.contains(task.GetState())) {
+    NotifyTaskStateChanged();
+  }
 }
 
 void ContentAgentToolProvider::CreateTools() {

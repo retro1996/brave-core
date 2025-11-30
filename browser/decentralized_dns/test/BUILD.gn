@@ -4,8 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import("//brave/build/config.gni")
+import("//brave/components/brave_wallet/common/buildflags/buildflags.gni")
 import("//brave/components/tor/buildflags/buildflags.gni")
 import("//testing/test.gni")
+
+assert(enable_brave_wallet)
 
 source_set("browser_tests") {
   testonly = true
@@ -17,7 +20,6 @@ source_set("browser_tests") {
       "//base/test:test_support",
       "//brave/components/brave_wallet/browser",
       "//brave/components/brave_wallet/common",
-      "//brave/components/brave_wallet/common:pref_names",
       "//brave/components/decentralized_dns/content",
       "//brave/components/decentralized_dns/core",
       "//chrome/browser:browser_process",
@@ -31,7 +33,7 @@ source_set("browser_tests") {
       "//testing/gtest",
     ]
   }  # !is_android
-}  # source_set("browser_tests") {
+}  # source_set("browser_tests")
 
 source_set("unit_tests") {
   testonly = true
@@ -46,10 +48,10 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//brave/browser/brave_wallet",
     "//brave/components/brave_wallet/browser",
+    "//brave/components/brave_wallet/browser:pref_names",
     "//brave/components/brave_wallet/browser:test_support",
     "//brave/components/brave_wallet/browser:utils",
     "//brave/components/brave_wallet/common:mojom",
-    "//brave/components/brave_wallet/common:pref_names",
     "//brave/components/decentralized_dns/content",
     "//brave/components/decentralized_dns/core",
     "//brave/components/tor/buildflags",

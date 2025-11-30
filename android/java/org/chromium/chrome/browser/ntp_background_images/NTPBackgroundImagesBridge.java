@@ -12,7 +12,6 @@ import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ObserverList;
 import org.chromium.base.ThreadUtils;
-import org.chromium.chrome.browser.BraveRewardsNativeWorker;
 import org.chromium.chrome.browser.ntp_background_images.model.BackgroundImage;
 import org.chromium.chrome.browser.ntp_background_images.model.ImageCredit;
 import org.chromium.chrome.browser.ntp_background_images.model.NTPImage;
@@ -61,24 +60,18 @@ public class NTPBackgroundImagesBridge {
         mObservers.removeObserver(observer);
     }
 
-    public static boolean enableSponsoredImages() {
-        BraveRewardsNativeWorker braveRewardsNativeWorker = BraveRewardsNativeWorker.getInstance();
-        return braveRewardsNativeWorker != null && braveRewardsNativeWorker.isSupported();
-    }
-
     public static NTPBackgroundImagesBridge getInstance(Profile profile) {
         return NTPBackgroundImagesBridgeJni.get().getInstance(profile);
     }
 
     @Nullable
-    public NTPImage getCurrentWallpaper() {
+    public NTPImage getCurrentWallpaper(boolean allowSponsoredImage) {
         ThreadUtils.assertOnUiThread();
-        if (enableSponsoredImages()) {
-            return NTPBackgroundImagesBridgeJni.get().getCurrentWallpaper(
-                mNativeNTPBackgroundImagesBridge, NTPBackgroundImagesBridge.this);
-        } else {
-            return null;
-        }
+        return NTPBackgroundImagesBridgeJni.get()
+                .getCurrentWallpaper(
+                        mNativeNTPBackgroundImagesBridge,
+                        NTPBackgroundImagesBridge.this,
+                        allowSponsoredImage);
     }
 
     public void wallpaperLogoClicked(Wallpaper wallpaper) {
@@ -104,7 +97,6 @@ public class NTPBackgroundImagesBridge {
             int focalPointY,
             String logoPath,
             String logoDestinationUrl,
-            String themeName,
             boolean isSponsored,
             String creativeInstanceId,
             String wallpaperId,
@@ -117,7 +109,6 @@ public class NTPBackgroundImagesBridge {
                 focalPointY,
                 logoPath,
                 logoDestinationUrl,
-                themeName,
                 isSponsored,
                 creativeInstanceId,
                 wallpaperId,
@@ -137,7 +128,9 @@ public class NTPBackgroundImagesBridge {
         NTPBackgroundImagesBridge getInstance(Profile profile);
 
         NTPImage getCurrentWallpaper(
-                long nativeNTPBackgroundImagesBridge, NTPBackgroundImagesBridge caller);
+                long nativeNTPBackgroundImagesBridge,
+                NTPBackgroundImagesBridge caller,
+                boolean allowSponsoredImage);
 
         void wallpaperLogoClicked(
                 long nativeNTPBackgroundImagesBridge,

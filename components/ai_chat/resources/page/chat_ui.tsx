@@ -114,7 +114,7 @@ function ConversationEntries(props: ConversationEntriesProps) {
         // button menu's get cut off when the conversation is short since
         // they cant be rendered outside of the iframe.
         // See https://github.com/brave/brave-browser/issues/46042
-        const additionalHeight = Math.max(0, 500 - height)
+        const additionalHeight = Math.max(0, 600 - height)
         document.body.style.setProperty(
           '--iframe-additional-margin-for-menus',
           additionalHeight + 'px',
@@ -155,13 +155,14 @@ function ConversationEntries(props: ConversationEntriesProps) {
 
   return (
     <iframe
-      sandbox='allow-scripts allow-same-origin allow-modals'
+      sandbox='allow-scripts allow-same-origin allow-modals allow-forms'
       allow='clipboard-write'
       src={
         'chrome-untrusted://leo-ai-conversation-entries/'
         + conversationContext.conversationUuid
       }
       ref={iframeRef}
+      data-testid='conversation-entries-iframe'
       onLoad={() => setHasLoaded(true)}
     />
   )

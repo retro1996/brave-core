@@ -12,7 +12,7 @@
 #include "brave/components/brave_rewards/core/pref_names.h"
 #include "brave/components/brave_shields/core/common/pref_names.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/brave_wallet/browser/pref_names.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/brave_wayback_machine/buildflags/buildflags.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/de_amp/common/pref_names.h"
@@ -35,6 +35,10 @@
 #include "components/omnibox/browser/omnibox_prefs.h"
 #include "components/search_engines/search_engines_pref_names.h"
 #include "extensions/buildflags/buildflags.h"
+
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+#include "brave/components/brave_wallet/browser/pref_names.h"
+#endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 
 #if BUILDFLAG(ENABLE_BRAVE_WAYBACK_MACHINE)
 #include "brave/components/brave_wayback_machine/pref_names.h"
@@ -229,26 +233,32 @@ const PrefsUtil::TypedPrefMap& BravePrefsUtil::GetAllowlistedKeys() {
   (*s_brave_allowlist)[kWebViewRoundedCorners] =
       settings_api::PrefType::kBoolean;
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
   // Brave Wallet pref
-  (*s_brave_allowlist)[kBraveWalletSelectedNetworks] =
+  (*s_brave_allowlist)[brave_wallet::kBraveWalletSelectedNetworks] =
       settings_api::PrefType::kDictionary;
-  (*s_brave_allowlist)[kDefaultEthereumWallet] =
+  (*s_brave_allowlist)[brave_wallet::kDefaultEthereumWallet] =
       settings_api::PrefType::kNumber;
-  (*s_brave_allowlist)[kDefaultSolanaWallet] = settings_api::PrefType::kNumber;
-  (*s_brave_allowlist)[kDefaultCardanoWallet] = settings_api::PrefType::kNumber;
-  (*s_brave_allowlist)[kDefaultBaseCurrency] = settings_api::PrefType::kString;
-  (*s_brave_allowlist)[kDefaultBaseCryptocurrency] =
+  (*s_brave_allowlist)[brave_wallet::kDefaultSolanaWallet] =
+      settings_api::PrefType::kNumber;
+  (*s_brave_allowlist)[brave_wallet::kDefaultCardanoWallet] =
+      settings_api::PrefType::kNumber;
+  (*s_brave_allowlist)[brave_wallet::kDefaultBaseCurrency] =
       settings_api::PrefType::kString;
-  (*s_brave_allowlist)[kShowWalletIconOnToolbar] =
+  (*s_brave_allowlist)[brave_wallet::kDefaultBaseCryptocurrency] =
+      settings_api::PrefType::kString;
+  (*s_brave_allowlist)[brave_wallet::kShowWalletIconOnToolbar] =
       settings_api::PrefType::kBoolean;
-  (*s_brave_allowlist)[kBraveWalletAutoLockMinutes] =
+  (*s_brave_allowlist)[brave_wallet::kBraveWalletAutoLockMinutes] =
       settings_api::PrefType::kNumber;
-  (*s_brave_allowlist)[kBraveWalletTransactionSimulationOptInStatus] =
-      settings_api::PrefType::kNumber;
-  (*s_brave_allowlist)[kBraveWalletNftDiscoveryEnabled] =
+  (*s_brave_allowlist)
+      [brave_wallet::kBraveWalletTransactionSimulationOptInStatus] =
+          settings_api::PrefType::kNumber;
+  (*s_brave_allowlist)[brave_wallet::kBraveWalletNftDiscoveryEnabled] =
       settings_api::PrefType::kBoolean;
-  (*s_brave_allowlist)[kBraveWalletPrivateWindowsEnabled] =
+  (*s_brave_allowlist)[brave_wallet::kBraveWalletPrivateWindowsEnabled] =
       settings_api::PrefType::kBoolean;
+#endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 
   // Leo Assistant pref
   (*s_brave_allowlist)[ai_chat::prefs::kBraveChatStorageEnabled] =

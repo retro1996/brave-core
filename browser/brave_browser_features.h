@@ -19,6 +19,7 @@ BASE_DECLARE_FEATURE(kBraveCleanupSessionCookiesOnSessionRestore);
 BASE_DECLARE_FEATURE(kBraveCopyCleanLinkByDefault);
 BASE_DECLARE_FEATURE(kBraveCopyCleanLinkFromJs);
 BASE_DECLARE_FEATURE(kBraveOverrideDownloadDangerLevel);
+BASE_DECLARE_FEATURE(kBraveRoundedCornersByDefault);
 BASE_DECLARE_FEATURE(kBraveDayZeroExperiment);
 #if BUILDFLAG(BRAVE_V8_ENABLE_DRUMBRAKE)
 BASE_DECLARE_FEATURE(kBraveWebAssemblyJitless);
@@ -27,14 +28,14 @@ BASE_DECLARE_FEATURE(kBraveV8JitlessMode);
 #if BUILDFLAG(IS_ANDROID)
 BASE_DECLARE_FEATURE(kBraveAndroidDynamicColors);
 BASE_DECLARE_FEATURE(kNewAndroidOnboarding);
-BASE_DECLARE_FEATURE(kBraveFreshNtpAfterIdleExpirement);
+BASE_DECLARE_FEATURE(kBraveFreshNtpAfterIdleExperiment);
 #endif  // BUILDFLAG(IS_ANDROID)
 
 extern const base::FeatureParam<std::string> kBraveDayZeroExperimentVariant;
 
 #if BUILDFLAG(IS_ANDROID)
 extern const base::FeatureParam<std::string>
-    kBraveFreshNtpAfterIdleExpirementVariant;
+    kBraveFreshNtpAfterIdleExperimentVariant;
 #endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace features

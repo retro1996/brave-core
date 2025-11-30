@@ -14,14 +14,17 @@
 #include "brave/components/brave_component_updater/browser/brave_component_updater_delegate.h"
 #include "brave/components/brave_component_updater/browser/local_data_files_service.h"
 #include "brave/components/brave_sync/network_time_helper.h"
-#include "brave/components/brave_wallet/browser/wallet_data_files_installer.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/debounce/core/browser/debounce_component_installer.h"
 #include "brave/components/https_upgrade_exceptions/browser/https_upgrade_exceptions_service.h"
 #include "brave/components/url_sanitizer/core/browser/url_sanitizer_component_installer.h"
-#include "brave/ios/browser/brave_wallet/wallet_data_files_installer_delegate_impl.h"
 #include "components/application_locale_storage/application_locale_storage.h"
 #include "ios/chrome/browser/shared/model/application_context/application_context.h"
-#include "net/base/features.h"
+
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+#include "brave/components/brave_wallet/browser/wallet_data_files_installer.h"
+#include "brave/ios/browser/brave_wallet/wallet_data_files_installer_delegate_impl.h"
+#endif
 
 BraveApplicationContextImpl::BraveApplicationContextImpl(
     base::SequencedTaskRunner* local_state_task_runner,
@@ -105,9 +108,8 @@ void BraveApplicationContextImpl::StartBraveServices() {
   url_sanitizer_component_installer();
   debounce_component_installer();
 
-  if (base::FeatureList::IsEnabled(net::features::kBraveHttpsByDefault)) {
-    https_upgrade_exceptions_service();
-  }
+  // eagerly initialize for component updater
+  https_upgrade_exceptions_service();
 
   // Start the local data file service
   local_data_files_service()->Start();
@@ -116,6 +118,8 @@ void BraveApplicationContextImpl::StartBraveServices() {
       GetNetworkTimeTracker(),
       base::SingleThreadTaskRunner::GetCurrentDefault());
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
   brave_wallet::WalletDataFilesInstaller::GetInstance().SetDelegate(
       std::make_unique<brave_wallet::WalletDataFilesInstallerDelegateImpl>());
+#endif
 }

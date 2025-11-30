@@ -26,17 +26,20 @@
 #include "brave/components/brave_account/features.h"
 #include "brave/components/brave_account/prefs.h"
 #include "components/prefs/testing_pref_service.h"
+#include "net/http/http_status_code.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace brave_account {
 
-struct RegisterInitializeTestCase;
-struct RegisterFinalizeTestCase;
-struct VerifyResultTestCase;
 struct CancelRegistrationTestCase;
+struct LoginFinalizeTestCase;
+struct LoginInitializeTestCase;
 struct LogOutTestCase;
+struct RegisterFinalizeTestCase;
+struct RegisterInitializeTestCase;
+struct VerifyResultTestCase;
 
 template <typename TestCase>
 class BraveAccountServiceTest : public testing::TestWithParam<const TestCase*> {
@@ -64,26 +67,29 @@ class BraveAccountServiceTest : public testing::TestWithParam<const TestCase*> {
 
     if constexpr (requires { typename TestCase::Endpoint; }) {
       if (test_case.endpoint_response) {
-        auto as_dict = [](const auto& opt) {
-          return opt ? opt->ToValue() : base::Value::Dict();
-        };
+        const auto& endpoint_response_status_code =
+            test_case.endpoint_response->status_code;
+        CHECK(endpoint_response_status_code);
 
-        const auto& endpoint_expected =
-            test_case.endpoint_response->endpoint_expected;
-        base::Value value(endpoint_expected.has_value()
-                              ? as_dict(endpoint_expected.value())
-                              : as_dict(endpoint_expected.error()));
-
+        const auto& endpoint_response_body = test_case.endpoint_response->body;
+        base::Value value(endpoint_response_body
+                              ? endpoint_response_body->has_value()
+                                    ? endpoint_response_body->value().ToValue()
+                                    : endpoint_response_body->error().ToValue()
+                              : base::Value::Dict());
         const auto body = base::WriteJson(value);
         CHECK(body);
+
         test_url_loader_factory_.AddResponse(
             TestCase::Endpoint::URL().spec(), *body,
-            test_case.endpoint_response->http_status_code);
+            static_cast<net::HttpStatusCode>(*endpoint_response_status_code));
       }
     }
 
     if constexpr (std::is_same_v<TestCase, RegisterInitializeTestCase> ||
-                  std::is_same_v<TestCase, RegisterFinalizeTestCase>) {
+                  std::is_same_v<TestCase, RegisterFinalizeTestCase> ||
+                  std::is_same_v<TestCase, LoginInitializeTestCase> ||
+                  std::is_same_v<TestCase, LoginFinalizeTestCase>) {
       base::test::TestFuture<typename TestCase::MojoExpected> future;
       TestCase::Run(test_case, CHECK_DEREF(brave_account_service_.get()),
                     future.GetCallback());

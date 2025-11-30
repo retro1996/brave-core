@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import("//brave/components/brave_wallet/common/buildflags/buildflags.gni")
 import("//brave/components/web_discovery/buildflags/buildflags.gni")
 import("//brave/components/webcompat_reporter/buildflags/buildflags.gni")
 import("//build/config/android/rules.gni")
@@ -12,10 +13,11 @@ declare_args() {
 }
 
 java_cpp_enum("brave_android_java_enums_srcjar") {
-  sources = [
-    "//brave/chromium_src/chrome/browser/notifications/notification_handler_impl.h",
-    "//brave/components/decentralized_dns/core/constants.h",
-  ]
+  sources = [ "//brave/chromium_src/chrome/browser/notifications/notification_handler_impl.h" ]
+
+  if (enable_brave_wallet) {
+    sources += [ "//brave/components/decentralized_dns/core/constants.h" ]
+  }
 }
 
 java_cpp_template("brave_config_java") {
@@ -24,6 +26,25 @@ java_cpp_template("brave_config_java") {
     "BRAVE_ANDROID_DEVELOPER_OPTIONS_CODE=\"$brave_android_developer_options_code\"",
     "BRAVE_ANDROID_WEBCOMPAT_REPORT_ENDPOINT=\"$webcompat_report_api_endpoint\"",
     "BRAVE_ANDROID_WEB_DISCOVERY_ENABLED=$enable_web_discovery_native",
+  ]
+}
+
+android_library("qrreader_java") {
+  sources = [
+    "java/org/chromium/chrome/browser/qrreader/BarcodeTracker.java",
+    "java/org/chromium/chrome/browser/qrreader/BarcodeTrackerFactory.java",
+    "java/org/chromium/chrome/browser/qrreader/CameraSource.java",
+    "java/org/chromium/chrome/browser/qrreader/CameraSourcePreview.java",
+    "java/org/chromium/chrome/browser/qrreader/QRCodeCameraManager.java",
+  ]
+
+  deps = [
+    "//base:base_java",
+    "//build/android:build_java",
+    "//third_party/android_deps:google_play_services_base_java",
+    "//third_party/android_deps:google_play_services_vision_common_java",
+    "//third_party/android_deps:google_play_services_vision_java",
+    "//third_party/androidx:androidx_annotation_annotation_java",
   ]
 }
 
@@ -652,6 +673,7 @@ android_resources("java_resources") {
     "java/brave-res/layout/qa_command_line.xml",
     "java/brave-res/layout/quick_action_search_and_bookmark_widget_layout.xml",
     "java/brave-res/layout/radio_button_group_ddns_resolve_method_preference.xml",
+    "java/brave-res/layout/radio_button_group_opening_screen_preference.xml",
     "java/brave-res/layout/recovery_phrase_item_layout.xml",
     "java/brave-res/layout/report_broken_site_layout.xml",
     "java/brave-res/layout/report_broken_site_screenshot_view.xml",
@@ -710,7 +732,6 @@ android_resources("java_resources") {
     "java/brave-res/xml/brave_search_engines_preferences.xml",
     "java/brave-res/xml/brave_solana_preferences.xml",
     "java/brave-res/xml/brave_stats_preferences.xml",
-    "java/brave-res/xml/brave_theme_preferences.xml",
     "java/brave-res/xml/brave_vpn_preferences.xml",
     "java/brave-res/xml/brave_wallet_networks_preference.xml",
     "java/brave-res/xml/brave_wallet_preferences.xml",

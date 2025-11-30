@@ -8,14 +8,16 @@ import Button from '@brave/leo/react/button'
 import Icon from '@brave/leo/react/icon'
 import Tooltip from '@brave/leo/react/tooltip'
 
-import { formatMessage } from '../../../shared/lib/locale_context'
+import { formatString } from '$web-common/formatString'
 import { useAppState } from '../../lib/app_model_context'
 import { useLocaleContext, usePluralString } from '../../lib/locale_strings'
 import { useConnectAccountRouter } from '../../lib/connect_account_router'
+import { shouldResetExternalWallet } from '../../../shared/lib/external_wallet'
 import { PayoutStatusView } from './payout_status_view'
 import { AdsSummary } from './ads_summary'
 import { AdsSettingsModal } from './ads_settings_modal'
 import { AdsHistoryModal } from './ads_history_modal'
+import { ResetExternalWalletCard } from './reset_external_wallet_card'
 
 import batCoinGray from '../../assets/bat_coin_gray_animated.svg'
 import batCoinColor from '../../assets/bat_coin_color_animated.svg'
@@ -90,19 +92,15 @@ export function EarningCard() {
             src={batCoinGray}
           />
           <div className='counter-text'>
-            {formatMessage(unconnectedAdsViewedString, {
-              tags: {
+            {unconnectedAdsViewedString
+              && formatString(unconnectedAdsViewedString, {
                 $1: (content) => (
-                  <div
-                    key='value'
-                    className='counter-value'
-                  >
+                  <div className='counter-value'>
                     {content}
                     {renderAdsViewedTooltip()}
                   </div>
                 ),
-              },
-            })}
+              })}
           </div>
         </div>
         <section className='unconnected'>
@@ -140,21 +138,16 @@ export function EarningCard() {
   }
 
   function renderEarningsCounter() {
-    if (!adsInfo) {
+    if (!adsInfo || !connectedAdsViewedString) {
       return
     }
-    return formatMessage(connectedAdsViewedString, {
-      tags: {
-        $1: (content) => (
-          <div
-            key='value'
-            className='counter-value'
-          >
-            {content}
-            {renderAdsViewedTooltip()}
-          </div>
-        ),
-      },
+    return formatString(connectedAdsViewedString, {
+      $1: (content) => (
+        <div className='counter-value'>
+          {content}
+          {renderAdsViewedTooltip()}
+        </div>
+      ),
     })
   }
 
@@ -189,13 +182,8 @@ export function EarningCard() {
         >
           <span>
             {adsInfo
-              && formatMessage(getString('earningsAdsReceivedText'), [
-                <span
-                  key='value'
-                  className='value'
-                >
-                  {adsReceivedThisMonth}
-                </span>,
+              && formatString(getString('earningsAdsReceivedText'), [
+                <span className='value'>{adsReceivedThisMonth}</span>,
               ])}
           </span>
           <Icon name={showAdDetails ? 'carat-up' : 'carat-down'} />
@@ -227,6 +215,10 @@ export function EarningCard() {
         {renderAdsSummary()}
       </div>
     )
+  }
+
+  if (externalWallet && shouldResetExternalWallet(externalWallet.provider)) {
+    return <ResetExternalWalletCard />
   }
 
   return (

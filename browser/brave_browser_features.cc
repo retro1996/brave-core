@@ -29,6 +29,12 @@ BASE_FEATURE(kBraveCopyCleanLinkByDefault,
 BASE_FEATURE(kBraveCopyCleanLinkFromJs,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Enables rounded corners on the main content areas by default (when the user
+// has not explicitly set the pref).
+BASE_FEATURE(kBraveRoundedCornersByDefault,
+             "brave-web-view-rounded-corners",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // Disable download warnings for dangerous files when Safe Browsing is
 // disabled.
 BASE_FEATURE(kBraveOverrideDownloadDangerLevel,
@@ -66,7 +72,7 @@ BASE_FEATURE(kBraveAndroidDynamicColors,
 // Enable fresh NTP display after idle expiration on Android.
 // This feature allows showing a refreshed NTP when the app has been idle
 // for a specified duration.
-BASE_FEATURE(kBraveFreshNtpAfterIdleExpirement,
+BASE_FEATURE(kBraveFreshNtpAfterIdleExperiment,
              base::FEATURE_DISABLED_BY_DEFAULT);
 #endif  // BUILDFLAG(IS_ANDROID)
 
@@ -78,8 +84,8 @@ const base::FeatureParam<std::string> kBraveDayZeroExperimentVariant{
 
 #if BUILDFLAG(IS_ANDROID)
 // The variant of the fresh NTP experiment. i.e. A, B, C, etc.
-const base::FeatureParam<std::string> kBraveFreshNtpAfterIdleExpirementVariant{
-    &kBraveFreshNtpAfterIdleExpirement,
+const base::FeatureParam<std::string> kBraveFreshNtpAfterIdleExperimentVariant{
+    &kBraveFreshNtpAfterIdleExperiment,
     /*name=*/"variant",
     /*default_value=*/"A"};
 #endif  // BUILDFLAG(IS_ANDROID)

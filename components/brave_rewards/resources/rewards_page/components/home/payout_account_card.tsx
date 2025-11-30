@@ -11,10 +11,13 @@ import Tooltip from '@brave/leo/react/tooltip'
 
 import { AppModelContext, useAppState } from '../../lib/app_model_context'
 import { useLocaleContext } from '../../lib/locale_strings'
-import { formatMessage } from '../../../shared/lib/locale_context'
+import { formatString } from '$web-common/formatString'
 import { TabOpenerContext } from '../../../shared/components/new_tab_link'
 import { WalletProviderIcon } from '../../../shared/components/icons/wallet_provider_icon'
-import { getExternalWalletProviderName } from '../../../shared/lib/external_wallet'
+import {
+  getExternalWalletProviderName,
+  shouldResetExternalWallet,
+} from '../../../shared/lib/external_wallet'
 import { AccountBalance } from '../common/account_balance'
 
 import { style } from './payout_account_card.style'
@@ -46,7 +49,7 @@ export function PayoutAccountCard() {
     return () => document.removeEventListener('click', listener)
   }, [setShowDetails])
 
-  if (!externalWallet) {
+  if (!externalWallet || shouldResetExternalWallet(externalWallet.provider)) {
     return null
   }
 
@@ -65,13 +68,13 @@ export function PayoutAccountCard() {
     return (
       <section className='reconnect'>
         <span className='text'>
-          {formatMessage(getString('payoutAccountLoginText'), [providerName])}
+          {formatString(getString('payoutAccountLoginText'), [providerName])}
         </span>
         <Button onClick={onReconnectClick}>
           <span slot='icon-before'>
             <WalletProviderIcon provider={externalWallet.provider} />
           </span>
-          {formatMessage(getString('payoutAccountLoginButtonLabel'), [
+          {formatString(getString('payoutAccountLoginButtonLabel'), [
             providerName,
           ])}
         </Button>

@@ -81,6 +81,8 @@ https://github.com/brave/brave-core/commit/a85a399a16df59b99b18382e2a4106d63e1a3
 
 If you want to provide a completely different implementation of a file, it is often not safe, but sometimes applicable. You can just provide the alternate implementation inside the `src/brave/chromium_src` directory.
 
+One usage that is generally acceptable is to replace a class with a stub implementation for code/features we want to completely disable. This is often done when disabling features for privacy reasons or to disable google-specific services.
+
 One way electron went wrong is they copied entire files for changes inside a similar setup, do NOT do this. This will lead to newer Chromium rebases over time using old stale code which causes problems and makes rebasing much harder.
 
 No BUILD.gn changes are needed for this.
@@ -243,4 +245,43 @@ In general we prefer to avoid patching, but Chromium makes a lot of class method
 ```ts
 const classWeNeedInternalsFrom = new UpstreamClass();
 (classWeNeedInternalsFrom as any).callPrivateMethod();
+```
+
+### Minimize dependencies
+
+We want to avoid creating new dependencies in the chrome code when possible. gn
+dependency checks also don't currently run for chromium_src so unlike other
+targets, it won't fail if you add includes that do not have deps listed for the
+original source file target. We also want to avoid patching gn to add
+dependencies. One way to avoid these is with forward declarations. For most code
+in chrome you can forward declare classes or methods that have their
+implementation in brave. Code in `component` gn target types doesn't lend itself
+to this technique in general. This also applies to patches in general including
+plaster.
+
+chromium_src/chrome/browser/chrome_feature/chrome_feature.cc
+```cpp
+bool BraveDoSomething(...);
+
+#define DoSomething DoSomething_ChromiumImpl
+
+bool ChromeFeature::DoSomething(...) {
+  if (BraveDoSomething(...)) {
+    return true;
+  }
+
+  return DoSomething_ChromiumImpl(...);
+}
+```
+
+brave/browser/some_feature/my_feature_override.cc
+```cpp
+bool BraveDoSomething(...) {
+  ...
+}
+```
+
+brave/browser/sources.gni
+```gn
+deps += [ "//brave/browser/chrome_feature" ]
 ```

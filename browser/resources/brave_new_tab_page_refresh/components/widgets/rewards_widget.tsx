@@ -9,7 +9,10 @@ import Icon from '@brave/leo/react/icon'
 import Tooltip from '@brave/leo/react/tooltip'
 
 import { getString } from '../../lib/strings'
-import { useRewardsState, useRewardsActions } from '../../context/rewards_context'
+import {
+  useRewardsState,
+  useRewardsActions,
+} from '../../context/rewards_context'
 import { usePluralString } from '../../lib/plural_string'
 import { usePersistedJSON } from '$web-common/usePersistedState'
 import { WidgetMenu } from './widget_menu'
@@ -17,8 +20,7 @@ import { Link, openLink } from '../common/link'
 import { WalletProviderIcon } from '../../../../../components/brave_rewards/resources/shared/components/icons/wallet_provider_icon'
 import { getExternalWalletProviderName } from '../../../../../components/brave_rewards/resources/shared/lib/external_wallet'
 import { getProviderPayoutStatus } from '../../../../../components/brave_rewards/resources/shared/lib/provider_payout_status'
-import { formatString } from '$web-common/locale'
-import formatMessage from '$web-common/formatMessage'
+import { formatString } from '$web-common/formatString'
 
 import * as urls from '../../../../../components/brave_rewards/resources/shared/lib/rewards_urls'
 
@@ -26,16 +28,16 @@ import { style } from './rewards_widget.style'
 
 const batAmountFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
-  maximumFractionDigits: 4
+  maximumFractionDigits: 4,
 })
 
 const exchangeAmountFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
-  maximumFractionDigits: 2
+  maximumFractionDigits: 2,
 })
 
 const monthNameFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'long'
+  month: 'long',
 })
 
 function getPayoutMonth() {
@@ -53,11 +55,14 @@ export function RewardsWidget() {
   const earnings = useRewardsState((s) => s.minEarningsPreviousMonth)
   const tosUpdateRequired = useRewardsState((s) => s.tosUpdateRequired)
   const adsViewed = useRewardsState((s) => s.rewardsAdsViewed)
-  const adsViewedString =
-    usePluralString('rewardsConnectedAdsViewedText', adsViewed ?? 0)
+  const adsViewedString = usePluralString(
+    S.REWARDS_CONNECTED_ADS_VIEWED_TEXT,
+    adsViewed ?? 0,
+  )
   const [cachedBalance, setCachedBalance] = usePersistedJSON<number | null>(
     'ntp-rewards-balance',
-    (data) => typeof data === 'number' ? data : null)
+    (data) => (typeof data === 'number' ? data : null),
+  )
 
   React.useEffect(() => {
     if (rewardsBalance !== null) {
@@ -76,11 +81,11 @@ export function RewardsWidget() {
           <div className='text'>
             <div>
               <Icon name='check-normal' />
-              <div>{getString('rewardsFeatureText1')}</div>
+              <div>{getString(S.REWARDS_ONBOARDING_TEXT_ITEM_1)}</div>
             </div>
             <div>
               <Icon name='check-normal' />
-              <div>{getString('rewardsFeatureText2')}</div>
+              <div>{getString(S.REWARDS_ONBOARDING_TEXT_ITEM_2)}</div>
             </div>
           </div>
           <div className='actions'>
@@ -102,18 +107,14 @@ export function RewardsWidget() {
   function renderUnconnected() {
     return (
       <RewardsWidgetContainer className='unconnected'>
-        <div className='title'>
-          {getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}
-        </div>
+        <div className='title'>{getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}</div>
         <div className='content'>
           <div className='connect-graphic' />
           <div className='text'>
             <div className='header'>
               {getString(S.NEW_TAB_REWARDS_CONNECT_TITLE)}
             </div>
-            <div>
-              {getString(S.NEW_TAB_REWARDS_CONNECT_TEXT)}
-            </div>
+            <div>{getString(S.NEW_TAB_REWARDS_CONNECT_TEXT)}</div>
           </div>
           <div className='actions'>
             <Button
@@ -134,9 +135,7 @@ export function RewardsWidget() {
     }
     return (
       <RewardsWidgetContainer className='login'>
-        <div className='title'>
-          {getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}
-        </div>
+        <div className='title'>{getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}</div>
         <div className='content'>
           <Icon name='bat-color' />
           <div className='text'>
@@ -144,11 +143,9 @@ export function RewardsWidget() {
               {getString(S.NEW_TAB_REWARDS_LOGIN_TITLE)}
             </div>
             <div>
-              {
-                formatString(getString(S.NEW_TAB_REWARDS_LOGIN_TEXT), [
-                  getExternalWalletProviderName(externalWallet.provider)
-                ])
-              }
+              {formatString(getString(S.NEW_TAB_REWARDS_LOGIN_TEXT), [
+                getExternalWalletProviderName(externalWallet.provider),
+              ])}
             </div>
           </div>
           <div className='actions'>
@@ -170,24 +167,20 @@ export function RewardsWidget() {
   function renderTosUpdateNotice() {
     return (
       <RewardsWidgetContainer className='login'>
-        <div className='title'>
-          {getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}
-        </div>
+        <div className='title'>{getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}</div>
         <div className='content'>
           <div className='text'>
             <div className='header'>
-              {getString('rewardsTosUpdateTitle')}
+              {getString(S.REWARDS_TOS_UPDATE_HEADING)}
             </div>
-            <div>
-              {getString('rewardsTosUpdateText')}
-            </div>
+            <div>{getString(S.REWARDS_TOS_UPDATE_NTP_TEXT)}</div>
           </div>
           <div className='actions'>
             <Button
               size='small'
               onClick={() => openLink(urls.settingsURL)}
             >
-              {getString('rewardsTosUpdateButtonLabel')}
+              {getString(S.REWARDS_TOS_UPDATE_NTP_BUTTON_LABEL)}
             </Button>
           </div>
         </div>
@@ -199,27 +192,25 @@ export function RewardsWidget() {
     if (earnings <= 0 || !externalWallet) {
       return null
     }
-    const status =
-      getProviderPayoutStatus(payoutStatus, externalWallet.provider)
+    const status = getProviderPayoutStatus(
+      payoutStatus,
+      externalWallet.provider,
+    )
     if (status === 'complete') {
       return (
         <div className='payout-status'>
-          {
-            formatString(getString('rewardsPayoutCompletedText'), [
-              getPayoutMonth()
-            ])
-          }
+          {formatString(getString(S.REWARDS_PAYMENT_COMPLETED), [
+            getPayoutMonth(),
+          ])}
         </div>
       )
     }
     if (status === 'processing') {
       return (
         <div className='payout-status'>
-          {
-            formatString(getString('rewardsPayoutProcessingText'), [
-              getPayoutMonth()
-            ])
-          }
+          {formatString(getString(S.REWARDS_PAYMENT_PROCESSING), [
+            getPayoutMonth(),
+          ])}
           <Link url={urls.payoutStatusURL}>
             {getString(S.NEW_TAB_REWARDS_PAYOUT_DETAILS_LINK)}
           </Link>
@@ -235,24 +226,13 @@ export function RewardsWidget() {
     }
     return (
       <div className='ads-viewed'>
-        {
-          // `adsViewedString` uses the tagged placeholder format understood by
-          // the `formatMessage` API.
-          formatMessage(adsViewedString, {
-            tags: {
-              $1: (content) => (
-                <span key='ad-count' className='ad-count'>
-                  {content}
-                </span>
-              )
-            }
-          })
-        }
+        {adsViewedString
+          && formatString(adsViewedString, {
+            $1: (content) => <span className='ad-count'>{content}</span>,
+          })}
         <Tooltip mode='default'>
           <Icon name='info-outline' />
-          <div slot='content'>
-            {getString('rewardsAdsViewedTooltip')}
-          </div>
+          <div slot='content'>{getString(S.REWARDS_ADS_VIEWED_TOOLTIP)}</div>
         </Tooltip>
       </div>
     )
@@ -265,18 +245,13 @@ export function RewardsWidget() {
     }
     return (
       <div className='balance'>
-        <span className='bat-amount'>
-          {batAmountFormatter.format(balance)}
-        </span>
+        <span className='bat-amount'>{batAmountFormatter.format(balance)}</span>
         <span className='bat-label'>BAT</span>
-        {
-          exchangeRate &&
-            <span className='exchange'>
-              ≈ {
-              exchangeAmountFormatter.format(balance * exchangeRate)
-              } USD
-            </span>
-        }
+        {exchangeRate && (
+          <span className='exchange'>
+            ≈ {exchangeAmountFormatter.format(balance * exchangeRate)} USD
+          </span>
+        )}
       </div>
     )
   }
@@ -299,9 +274,7 @@ export function RewardsWidget() {
 
   return (
     <RewardsWidgetContainer className='connected'>
-      <div className='title'>
-        {getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}
-      </div>
+      <div className='title'>{getString(S.NEW_TAB_REWARDS_WIDGET_TITLE)}</div>
       <div className='content'>
         <div className='coin-graphic' />
         <div className='text'>
@@ -324,7 +297,10 @@ interface ContainerProps {
 function RewardsWidgetContainer(props: ContainerProps) {
   const actions = useRewardsActions()
   return (
-    <div data-css-scope={style.scope} className={props.className}>
+    <div
+      data-css-scope={style.scope}
+      className={props.className}
+    >
       <WidgetMenu>
         <leo-menu-item onClick={() => actions.setShowRewardsWidget(false)}>
           <Icon name='eye-off' />

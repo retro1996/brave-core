@@ -22,8 +22,7 @@
 #include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/brave_sync/features.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/brave_wallet/common/buildflags.h"
-#include "brave/components/brave_wallet/common/features.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/containers/buildflags/buildflags.h"
 #include "brave/components/de_amp/common/features.h"
 #include "brave/components/debounce/core/common/features.h"
@@ -109,6 +108,10 @@
 #include "brave/components/psst/common/features.h"
 #endif
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+#include "brave/components/brave_wallet/common/features.h"
+#endif
+
 #if defined(TOOLKIT_VIEWS)
 #include "brave/browser/ui/darker_theme/features.h"
 #include "brave/browser/ui/page_info/features.h"
@@ -116,6 +119,7 @@
 
 #define EXPAND_FEATURE_ENTRIES(...) __VA_ARGS__,
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
 const flags_ui::FeatureEntry::FeatureParam
     kZCashShieldedTransactionsDisabled[] = {
         {"zcash_shielded_transactions_enabled", "false"}};
@@ -133,6 +137,7 @@ const flags_ui::FeatureEntry::FeatureVariation kZCashFeatureVariations[] = {
      std::size(kZCashShieldedTransactionsEnabled), nullptr}
 #endif  // BUILDFLAG(ENABLE_ORCHARD)
 };
+#endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 
 namespace {
 const char* const kBraveSyncImplLink[1] = {"https://github.com/brave/go-sync"};
@@ -197,6 +202,7 @@ const char* const kBraveSyncImplLink[1] = {"https://github.com/brave/go-sync"};
           FEATURE_VALUE_TYPE(brave_rewards::features::kGeminiFeature),     \
       }))
 
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
 #define BRAVE_NATIVE_WALLET_FEATURE_ENTRIES                                   \
   EXPAND_FEATURE_ENTRIES(                                                     \
       {                                                                       \
@@ -247,6 +253,9 @@ const char* const kBraveSyncImplLink[1] = {"https://github.com/brave/go-sync"};
           FEATURE_VALUE_TYPE(brave_wallet::features::                         \
                                  kBraveWalletTransactionSimulationsFeature),  \
       })
+#else
+#define BRAVE_NATIVE_WALLET_FEATURE_ENTRIES
+#endif
 
 #define BRAVE_NEWS_FEATURE_ENTRIES                                             \
   EXPAND_FEATURE_ENTRIES(                                                      \
@@ -536,6 +545,20 @@ constexpr flags_ui::FeatureEntry::Choice kVerticalTabCollapseDelayChoices[] = {
 #define BRAVE_MIDDLE_CLICK_AUTOSCROLL_FEATURE_ENTRY
 #endif
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
+#define BRAVE_FORCE_CONTEXT_MENU_ON_SHIFT_RIGHT_CLICK_FEATURE_ENTRY            \
+  EXPAND_FEATURE_ENTRIES({                                                     \
+      "force-context-menu-on-shift-right-click",                               \
+      "Force context menu on Shift + Right Click on elements in pages",        \
+      "Always show the context menu when Shift + Right Click is used, "        \
+      "even if a web page is preventing it.",                                  \
+      kOsWin | kOsLinux | kOsMac,                                              \
+      FEATURE_VALUE_TYPE(blink::features::kForceContextMenuOnShiftRightClick), \
+  })
+#else
+#define BRAVE_FORCE_CONTEXT_MENU_ON_SHIFT_RIGHT_CLICK_FEATURE_ENTRY
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
+
 #if BUILDFLAG(ENABLE_AI_CHAT)
 #define BRAVE_AI_CHAT_FEATURE_ENTRIES                                          \
   EXPAND_FEATURE_ENTRIES(                                                      \
@@ -715,6 +738,15 @@ constexpr flags_ui::FeatureEntry::Choice kVerticalTabCollapseDelayChoices[] = {
                    kOsAll,                                                   \
                    FEATURE_VALUE_TYPE(features::kBraveWebAssemblyJitless),   \
                }))
+
+#define BRAVE_FORCE_POPUP_TO_BE_OPENED_IN_NEW_TAB_FEATURE_ENTRY      \
+  EXPAND_FEATURE_ENTRIES({                                           \
+      "force-popup-to-be-opened-as-tab",                             \
+      "Force popups to be opened as tab",                            \
+      "Forces all popup windows to be opened in a new tab instead.", \
+      kOsDesktop,                                                    \
+      FEATURE_VALUE_TYPE(features::kForcePopupToBeOpenedAsTab),      \
+  })
 
 // Keep the last item empty.
 #define LAST_BRAVE_FEATURE_ENTRIES_ITEM
@@ -1210,6 +1242,14 @@ constexpr flags_ui::FeatureEntry::Choice kVerticalTabCollapseDelayChoices[] = {
               webcompat::features::kBraveWebcompatExceptionsService),          \
       },                                                                       \
       {                                                                        \
+          "brave-rounded-corners-by-default",                                  \
+          "Use rounded corners on main content areas by default",              \
+          "Renders the main content area and sidebar panel with rounded "      \
+          "corners, padding, and a drop shadow by default",                    \
+          kOsWin | kOsLinux | kOsMac,                                          \
+          FEATURE_VALUE_TYPE(features::kBraveRoundedCornersByDefault),         \
+      },                                                                       \
+      {                                                                        \
           "brave-override-sync-server-url",                                    \
           "Override Brave Sync server URL",                                    \
           "Allows you to use a self-hosted server with Brave Sync. You can "   \
@@ -1273,6 +1313,7 @@ constexpr flags_ui::FeatureEntry::Choice kVerticalTabCollapseDelayChoices[] = {
   BRAVE_AI_REWRITER                                                            \
   BRAVE_OMNIBOX_FEATURES                                                       \
   BRAVE_MIDDLE_CLICK_AUTOSCROLL_FEATURE_ENTRY                                  \
+  BRAVE_FORCE_CONTEXT_MENU_ON_SHIFT_RIGHT_CLICK_FEATURE_ENTRY                  \
   BRAVE_UPGRADE_WHEN_IDLE_FEATURE_ENTRY                                        \
   BRAVE_EXTENSIONS_MANIFEST_V2                                                 \
   BRAVE_WORKAROUND_NEW_WINDOW_FLASH                                            \
@@ -1281,6 +1322,7 @@ constexpr flags_ui::FeatureEntry::Choice kVerticalTabCollapseDelayChoices[] = {
   BRAVE_EDUCATION_FEATURE_ENTRIES                                              \
   BRAVE_UPDATER_FEATURE_ENTRIES                                                \
   PSST_FEATURE_ENTRIES                                                         \
+  BRAVE_FORCE_POPUP_TO_BE_OPENED_IN_NEW_TAB_FEATURE_ENTRY                      \
   LAST_BRAVE_FEATURE_ENTRIES_ITEM  // Keep it as the last item.
 namespace flags_ui {
 namespace {

@@ -10,7 +10,7 @@ import Toggle from '@brave/leo/react/toggle'
 import { useNewTabState, useNewTabActions } from '../../context/new_tab_context'
 import { ClockFormat } from '../../state/new_tab_state'
 import { getString } from '../../lib/strings'
-import { formatString } from '$web-common/locale'
+import { formatString } from '$web-common/formatString'
 
 import { style } from './clock_panel.style'
 
@@ -28,9 +28,8 @@ export function ClockPanel() {
         return getString(S.NEW_TAB_CLOCK_FORMAT_OPTION24HOUR_TEXT)
       default:
         return formatString(
-          getString(S.NEW_TAB_CLOCK_FORMAT_OPTION_AUTOMATIC_TEXT), [
-            new Intl.DateTimeFormat(undefined).resolvedOptions().locale
-          ]
+          getString(S.NEW_TAB_CLOCK_FORMAT_OPTION_AUTOMATIC_TEXT),
+          [new Intl.DateTimeFormat(undefined).resolvedOptions().locale],
         )
     }
   }
@@ -48,7 +47,9 @@ export function ClockPanel() {
         <Toggle
           size='small'
           checked={showClock}
-          onChange={({ checked }) => { actions.setShowClock(checked) }}
+          onChange={({ checked }) => {
+            actions.setShowClock(checked)
+          }}
         />
       </div>
       <div className='control-row'>
@@ -57,7 +58,7 @@ export function ClockPanel() {
           value={String(clockFormat)}
           positionStrategy='fixed'
           onChange={(detail) => {
-            actions.setClockFormat(Number(detail.value) || 0 as ClockFormat)
+            actions.setClockFormat(Number(detail.value) || (0 as ClockFormat))
           }}
         >
           <span slot='value'>{formatOptionText(clockFormat)}</span>

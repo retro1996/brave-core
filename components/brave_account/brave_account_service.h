@@ -16,9 +16,10 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "base/types/expected.h"
 #include "brave/components/brave_account/endpoint_client/request_handle.h"
 #include "brave/components/brave_account/endpoints/error.h"
+#include "brave/components/brave_account/endpoints/login_finalize.h"
+#include "brave/components/brave_account/endpoints/login_init.h"
 #include "brave/components/brave_account/endpoints/password_finalize.h"
 #include "brave/components/brave_account/endpoints/password_init.h"
 #include "brave/components/brave_account/endpoints/verify_result.h"
@@ -65,10 +66,6 @@ class BraveAccountService : public KeyedService, public mojom::Authentication {
       OSCryptCallback decrypt_callback,
       std::unique_ptr<base::OneShotTimer> verify_result_timer);
 
-  std::string Encrypt(const std::string& plain_text) const;
-
-  std::string Decrypt(const std::string& base64) const;
-
   void RegisterInitialize(const std::string& email,
                           const std::string& blinded_message,
                           RegisterInitializeCallback callback) override;
@@ -81,23 +78,22 @@ class BraveAccountService : public KeyedService, public mojom::Authentication {
 
   void CancelRegistration() override;
 
+  void LoginInitialize(const std::string& email,
+                       const std::string& serialized_ke1,
+                       LoginInitializeCallback callback) override;
+
+  void LoginFinalize(const std::string& encrypted_login_token,
+                     const std::string& client_mac,
+                     LoginFinalizeCallback callback) override;
+
   void LogOut() override;
 
-  void OnRegisterInitialize(
-      RegisterInitializeCallback callback,
-      int response_code,
-      base::expected<std::optional<endpoints::PasswordInit::Response>,
-                     std::optional<endpoints::PasswordInit::Error>> reply);
+  void OnRegisterInitialize(RegisterInitializeCallback callback,
+                            endpoints::PasswordInit::Response response);
 
-  void OnRegisterFinalize(
-      RegisterFinalizeCallback callback,
-      const std::string& encrypted_verification_token,
-      int response_code,
-      base::expected<std::optional<endpoints::PasswordFinalize::Response>,
-                     std::optional<endpoints::PasswordFinalize::Error>> reply);
-
-  std::optional<mojom::RegisterErrorCode> TransformError(
-      std::optional<endpoints::Error> error);
+  void OnRegisterFinalize(RegisterFinalizeCallback callback,
+                          const std::string& encrypted_verification_token,
+                          endpoints::PasswordFinalize::Response response);
 
   void OnVerificationTokenChanged();
 
@@ -108,10 +104,17 @@ class BraveAccountService : public KeyedService, public mojom::Authentication {
   void VerifyResult(
       endpoint_client::RequestHandle current_verify_result_request);
 
-  void OnVerifyResult(
-      int response_code,
-      base::expected<std::optional<endpoints::VerifyResult::Response>,
-                     std::optional<endpoints::VerifyResult::Error>> reply);
+  void OnVerifyResult(endpoints::VerifyResult::Response response);
+
+  void OnLoginInitialize(LoginInitializeCallback callback,
+                         endpoints::LoginInit::Response response);
+
+  void OnLoginFinalize(LoginFinalizeCallback callback,
+                       endpoints::LoginFinalize::Response response);
+
+  std::string Encrypt(const std::string& plain_text) const;
+
+  std::string Decrypt(const std::string& base64) const;
 
   const raw_ptr<PrefService> pref_service_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;

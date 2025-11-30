@@ -57,7 +57,10 @@ public enum BraveStoreProductGroup: String, CaseIterable {
   public var skusDomain: String {
     switch self {
     case .vpn: return BraveDomains.serviceDomain(prefix: "vpn")
-    case .leo: return BraveDomains.serviceDomain(prefix: "leo")
+    case .leo:
+      // AI Chat uses staging as its default in unofficial builds. The passed in environment is only
+      // used in unofficial builds and when no service override switch is in place.
+      return BraveDomains.serviceDomain(prefix: "leo", environment: .staging)
     }
   }
 }
@@ -156,7 +159,10 @@ public enum BraveStoreProduct: String, AppStoreProduct, CaseIterable {
 /// A structure for handling Brave Store transactions, products, and purchases
 public class BraveStoreSDK: AppStoreSDK {
 
-  public static let shared = BraveStoreSDK()
+  @available(iOS, deprecated, message: "Create a new BraveStoreSDK instance instead.")
+  public static let shared = BraveStoreSDK(
+    skusService: Skus.SkusServiceFactory.get(privateMode: false)
+  )
 
   // MARK: - Error
 
@@ -199,7 +205,11 @@ public class BraveStoreSDK: AppStoreSDK {
   /// All observers this uses
   private var observers = [AnyCancellable]()
 
-  private override init() {
+  private let skusService: (any SkusSkusService)?
+
+  public init(skusService: (any SkusSkusService)?) {
+    self.skusService = skusService
+
     super.init()
 
     // Observe Product Updates
@@ -258,11 +268,6 @@ public class BraveStoreSDK: AppStoreSDK {
     }
 
     return false
-  }
-
-  /// Refreshes all the Skus SDK orders
-  public func refreshAllSkusOrders() {
-
   }
 
   /// Restores a single purchased product
@@ -335,7 +340,7 @@ public class BraveStoreSDK: AppStoreSDK {
     }
   }
 
-  /// Processes the product purchase transaction with the BraveSkusSDK
+  /// Processes the product purchase transaction with the SkusService
   /// If the transaction cannot be processed (receipt is empty or null), throw an exception
   /// - Parameter productId: The ID of the product that is currently being purchased
   override public func processPurchase(of productId: Product.ID) async throws {
@@ -433,23 +438,24 @@ public class BraveStoreSDK: AppStoreSDK {
       return
     }
 
+    guard let skusService else {
+      throw SkusError.skusServiceUnavailable
+    }
+
     Logger.module.info("[BraveStoreSDK] - Refreshing Receipt")
 
     // Attempt to update the Application Bundle's receipt, if necessary
     try await AppStoreReceipt.sync()
 
-    // Create a Skus-SDK for the specified product
-    let skusSDK = BraveSkusSDK.shared
-
     // Create an order for the AppStore receipt
     // If an order already exists, refreshes the order information
     if let orderId = Preferences.AIChat.subscriptionOrderId.value {
-      try await skusSDK.refreshOrder(orderId: orderId, for: productGroup)
+      try await skusService.refreshOrder(orderId: orderId, for: productGroup)
       return
     }
 
     Logger.module.info("[BraveStoreSDK] - No Order To Refresh")
-    throw BraveSkusSDK.SkusError.cannotCreateOrder
+    throw SkusError.cannotCreateOrder
   }
 
   /// Updates the Skus-SDK credentials and order information
@@ -461,6 +467,10 @@ public class BraveStoreSDK: AppStoreSDK {
     // until we update the VPN code to use it
     if product.group == .vpn {
       return
+    }
+
+    guard let skusService else {
+      throw SkusError.skusServiceUnavailable
     }
 
     Preferences.AIChat.subscriptionProductId.value = product.rawValue
@@ -475,15 +485,13 @@ public class BraveStoreSDK: AppStoreSDK {
     }
 
     // Create a Skus-SDK for the specified product
-    let skusSDK = BraveSkusSDK.shared
-
     // Create an order for the AppStore receipt
     // If an order already exists, refreshes the order information
-    let orderId = try await skusSDK.createOrder(for: product)
+    let orderId = try await skusService.createOrder(for: product)
 
     // There is an order, and an expiry date, but no credentials
     // Fetch the credentials
-    try await skusSDK.fetchCredentials(orderId: orderId, for: product.group)
+    try await skusService.fetchCredentials(orderId: orderId, for: product.group)
 
     // Store the Order-ID
     Preferences.AIChat.subscriptionOrderId.value = orderId

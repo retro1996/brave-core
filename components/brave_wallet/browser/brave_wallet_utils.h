@@ -14,7 +14,9 @@
 #include "base/containers/span.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
+#include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 
+static_assert(BUILDFLAG(ENABLE_BRAVE_WALLET));
 class PrefService;
 namespace base {
 class Value;
@@ -25,6 +27,9 @@ class GURL;
 namespace brave_wallet {
 
 class CardanoAddress;
+
+// Returns true if Brave Wallet is allowed (not disabled by policy).
+bool IsAllowed(PrefService* prefs);
 
 bool EncodeString(std::string_view input, std::string* output);
 bool EncodeStringArray(base::span<const std::string> input,
@@ -119,6 +124,7 @@ std::string WalletInternalErrorMessage();
 std::string WalletParsingErrorMessage();
 std::string WalletInsufficientBalanceErrorMessage();
 std::string WalletUserRejectedRequestErrorMessage();
+std::string WalletAmountTooSmallErrorMessage();
 
 mojom::BlockchainTokenPtr GetBitcoinNativeToken(std::string_view chain_id);
 mojom::BlockchainTokenPtr GetZcashNativeToken(std::string_view chain_id);

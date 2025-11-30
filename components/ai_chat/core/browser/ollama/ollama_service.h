@@ -12,6 +12,7 @@
 
 #include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "brave/components/ai_chat/core/browser/ollama/ollama_model_fetcher.h"
 #include "brave/components/ai_chat/core/common/mojom/ollama.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -26,10 +27,20 @@ namespace ai_chat {
 
 // Handles network communication with a local Ollama instance.
 // Implements the mojom::OllamaService interface for UI communication.
-class OllamaService : public KeyedService, public mojom::OllamaService {
+// Also implements OllamaModelFetcher::Delegate to provide model fetching
+// capabilities.
+class OllamaService : public KeyedService,
+                      public mojom::OllamaService,
+                      public OllamaModelFetcher::Delegate {
  public:
-  explicit OllamaService(
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+  using ModelDetails = OllamaModelFetcher::ModelDetails;
+  using ModelsCallback = OllamaModelFetcher::Delegate::ModelsCallback;
+  using ModelDetailsCallback =
+      OllamaModelFetcher::Delegate::ModelDetailsCallback;
+
+  OllamaService(
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      std::unique_ptr<OllamaModelFetcher> model_fetcher);
   ~OllamaService() override;
 
   OllamaService(const OllamaService&) = delete;
@@ -38,17 +49,56 @@ class OllamaService : public KeyedService, public mojom::OllamaService {
   // Bind a receiver for the OllamaService interface
   void BindReceiver(mojo::PendingReceiver<mojom::OllamaService> receiver);
 
+  // KeyedService implementation:
+  void Shutdown() override;
+
   // mojom::OllamaService implementation:
   void IsConnected(IsConnectedCallback callback) override;
 
+  // OllamaModelFetcher::Delegate implementation:
+  void FetchModels(ModelsCallback callback) override;
+  void ShowModel(const std::string& model_name,
+                 ModelDetailsCallback callback) override;
+
  private:
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest, ParseModelsResponse_Valid);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest, ParseModelsResponse_InvalidJSON);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelsResponse_MissingModelsKey);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest, ParseModelsResponse_EmptyModels);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelsResponse_InvalidModelStructure);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest, ParseModelDetailsResponse_Valid);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelDetailsResponse_InvalidJSON);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelDetailsResponse_NoModelInfo);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelDetailsResponse_NoCapabilities);
+  FRIEND_TEST_ALL_PREFIXES(OllamaServiceTest,
+                           ParseModelDetailsResponse_EmptyResponse);
+
   void OnConnectionCheckComplete(
       IsConnectedCallback callback,
       std::unique_ptr<network::SimpleURLLoader> loader,
       std::optional<std::string> response);
 
+  void OnModelsListComplete(ModelsCallback callback,
+                            std::unique_ptr<network::SimpleURLLoader> loader,
+                            std::optional<std::string> response);
+
+  void OnModelDetailsComplete(ModelDetailsCallback callback,
+                              std::unique_ptr<network::SimpleURLLoader> loader,
+                              std::optional<std::string> response);
+
+  std::optional<std::vector<std::string>> ParseModelsResponse(
+      const std::string& response_body);
+  std::optional<ModelDetails> ParseModelDetailsResponse(
+      const std::string& response_body);
+
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   mojo::ReceiverSet<mojom::OllamaService> receivers_;
+  std::unique_ptr<OllamaModelFetcher> model_fetcher_;
   base::WeakPtrFactory<OllamaService> weak_ptr_factory_{this};
 };
 

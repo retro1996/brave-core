@@ -38,11 +38,26 @@ class ToolProvider {
   ToolProvider(const ToolProvider&) = delete;
   ToolProvider& operator=(const ToolProvider&) = delete;
 
+  // Marks that a new message has been added to the conversation and therefore
+  // a new generation loop has started which may result in tool calls.
   // Optionally handle and reset the state of this class or any tools that
   // should only maintain state within the tool loop of a single set of
   // responses. For example a TODO tool would only be applicable during 1 task,
   // but not a whole conversation.
   virtual void OnNewGenerationLoop() {}
+
+  // A response has been completed with no more tool use requests to handle.
+  // Future requests might be made in a new loop (after `OnNewGenerationLoop` is
+  // called). This is a good opportunity to hand over any control back to the
+  // user.
+  virtual void OnGenerationCompleteWithNoToolsToHandle() {}
+
+  // A task can be interrupted by the user by some external means that the
+  // ToolProvider knows about. For example, the user can pause tab operations
+  // by clicking a button in the browser UI. The tool loop that this
+  // ToolProvider is part of will ask each ToolProvider if it can continue
+  // executing tools once any tool provider sends OnTaskStateChanged.
+  virtual bool IsPausedByUser();
 
   class Observer : public base::CheckedObserver {
    public:
@@ -50,6 +65,9 @@ class ToolProvider {
 
     // This ToolProvider has some Tool acting on a Tab
     virtual void OnContentTaskStarted(int32_t tab_id) {}
+
+    // User requests that the task should be paused
+    virtual void OnTaskStateChanged(ToolProvider* tool_provider) {}
   };
 
   void AddObserver(Observer* observer);
@@ -66,11 +84,23 @@ class ToolProvider {
   // params here.
   virtual std::vector<base::WeakPtr<Tool>> GetTools() = 0;
 
+  // User has requested to pause any tasks including any currently executing
+  // tools and any long-running actions that are in an active state. Return
+  // control to the user temporarily, if applicable.
+  virtual void PauseAllTasks() {}
+
+  // User has requested to resume any long-running tasks. Prepare for possible
+  // tool execution. Take back control from the user, if applicable.
+  virtual void ResumeAllTasks() {}
+
   // Attempts to stops all current tasks started by Tools from this
-  // ToolProvider.
+  // ToolProvider. Tasks will not be resumed unless OnNewGenerationLoop is
+  // called.
   virtual void StopAllTasks() {}
 
  protected:
+  void NotifyTaskStateChanged();
+
   base::ObserverList<Observer> observers_;
 };
 

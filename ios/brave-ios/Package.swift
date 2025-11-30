@@ -384,6 +384,7 @@ var package = Package(
         "Then",
         "Shared",
         "BraveStrings",
+        "Web",
         .product(name: "BigNumber", package: "Swift-BigInt"),
         .product(name: "Algorithms", package: "swift-algorithms"),
         .product(name: "Collections", package: "swift-collections"),
@@ -410,6 +411,7 @@ var package = Package(
     .target(
       name: "BraveVPN",
       dependencies: [
+        "BraveCore",
         "BraveStore",
         "BraveStrings",
         "SnapKit",
